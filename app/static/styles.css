@@ -577,6 +577,12 @@ button.danger:hover {
   border-color: #f0c5cf;
 }
 
+.icon-svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
 .reply-menu {
   position: relative;
 }
