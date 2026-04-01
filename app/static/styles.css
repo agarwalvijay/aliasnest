@@ -175,10 +175,23 @@ button.danger:hover {
   z-index: 30;
 }
 
-.banner {
-  max-width: 1240px;
-  margin: 4px auto 0;
-  padding: 0 22px;
+.toast-stack {
+  position: fixed;
+  top: 72px;
+  right: 18px;
+  z-index: 50;
+  display: grid;
+  gap: 8px;
+  width: min(420px, calc(100vw - 24px));
+}
+
+.toast {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #fff;
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
 }
 
 .inbox-layout {
@@ -204,6 +217,13 @@ button.danger:hover {
   flex-wrap: wrap;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--line);
+}
+
+.folders-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
 }
 
 .folder-chip {
@@ -383,6 +403,22 @@ button.danger:hover {
 
 .panel {
   margin-bottom: 14px;
+}
+
+.compact-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.compact-form-3 {
+  grid-template-columns: minmax(0, 1fr) minmax(140px, 200px) auto;
+}
+
+.compact-form input,
+.compact-form select {
+  margin: 0;
 }
 
 .subtle {

@@ -23,15 +23,13 @@
           {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
           <h3>Timezone</h3>
-          <form method="post" action="/settings/timezone" class="stack panel">
-            <label>Your timezone
-              <select name="timezone" required>
-                {% for tz in timezone_options %}
-                  <option value="{{ tz }}" {% if tz == user_timezone %}selected{% endif %}>{{ tz }}</option>
-                {% endfor %}
-              </select>
-            </label>
-            <button type="submit">Save timezone</button>
+          <form method="post" action="/settings/timezone" class="compact-form panel">
+            <select name="timezone" required aria-label="Timezone">
+              {% for tz in timezone_options %}
+                <option value="{{ tz }}" {% if tz == user_timezone %}selected{% endif %}>{{ tz }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="icon-action-btn" title="Save timezone" aria-label="Save timezone">✓</button>
           </form>
 
           <div class="heading-row">
@@ -56,20 +54,16 @@
             </details>
           </div>
 
-          <form method="post" action="/domains" class="stack panel">
-            <label>Add custom domain
-              <input type="text" name="domain_name" placeholder="example.com" required />
-            </label>
-            <button type="submit">Add domain</button>
+          <form method="post" action="/domains" class="compact-form panel">
+            <input type="text" name="domain_name" placeholder="Add custom domain (example.com)" required />
+            <button type="submit" class="icon-action-btn" title="Add domain" aria-label="Add domain">✓</button>
           </form>
 
           <div class="stack compact-list">
-            {% for domain in domains %}
+            {% for domain in custom_domains %}
               <article class="domain-card">
                 <p class="domain-title"><strong>{{ domain.name }}</strong></p>
-                {% if domain.is_default %}
-                  <p class="subtle">Default domain (always available)</p>
-                {% elif domain.is_verified %}
+                {% if domain.is_verified %}
                   <p class="ok">Verified</p>
                   <form method="post" action="/domains/{{ domain.id }}/delete" class="inline-form">
                     <button type="submit" class="danger">Delete domain</button>
@@ -98,21 +92,20 @@
                 {% endif %}
               </article>
             {% endfor %}
+            {% if not custom_domains %}
+              <p class="subtle">No custom domains yet.</p>
+            {% endif %}
           </div>
 
           <h3>Create mask</h3>
-          <form method="post" action="/masks" class="stack panel">
-            <label>Local part
-              <input type="text" name="local_part" placeholder="shopping-1" required />
-            </label>
-            <label>Domain
-              <select name="domain_name" required>
-                {% for domain in verified_domains %}
-                  <option value="{{ domain.name }}">{{ domain.name }}</option>
-                {% endfor %}
-              </select>
-            </label>
-            <button type="submit">Create mask</button>
+          <form method="post" action="/masks" class="compact-form compact-form-3 panel">
+            <input type="text" name="local_part" placeholder="Local part (shopping-1)" required />
+            <select name="domain_name" required aria-label="Mask domain">
+              {% for domain in verified_domains %}
+                <option value="{{ domain.name }}">{{ domain.name }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="icon-action-btn" title="Create mask" aria-label="Create mask">✓</button>
           </form>
         </div>
       </details>
@@ -122,11 +115,31 @@
     </div>
   </header>
 
-  {% if info %}<p class="banner ok">{{ info }}</p>{% endif %}
-  {% if error %}<p class="banner error">{{ error }}</p>{% endif %}
+  {% if info or error %}
+    <div class="toast-stack" aria-live="polite">
+      {% if info %}<p class="toast ok">{{ info }}</p>{% endif %}
+      {% if error %}<p class="toast error">{{ error }}</p>{% endif %}
+    </div>
+  {% endif %}
 
   <main class="inbox-layout">
     <section class="card list-pane">
+      <div class="folders-head">
+        <h3>Aliases</h3>
+        <button
+          type="button"
+          class="icon-action-btn"
+          title="Refresh inbox"
+          aria-label="Refresh inbox"
+          onclick="window.location.reload()"
+        >
+          <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 12A8 8 0 1 1 17.6 6.3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            <path d="M18 3.8V7.8H14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+
       <div class="folders-row">
         {% if masks %}
           {% for mask in masks %}
@@ -273,5 +286,22 @@
       {% endif %}
     </section>
   </main>
+
+  <script>
+    (function () {
+      const AUTO_REFRESH_MS = 90 * 1000;
+      function shouldPauseRefresh() {
+        if (document.hidden) return true;
+        const active = document.activeElement;
+        if (active && ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName)) return true;
+        if (document.querySelector(".settings-drawer[open], .reply-menu[open]")) return true;
+        return false;
+      }
+      setInterval(function () {
+        if (shouldPauseRefresh()) return;
+        window.location.reload();
+      }, AUTO_REFRESH_MS);
+    })();
+  </script>
 </body>
 </html>

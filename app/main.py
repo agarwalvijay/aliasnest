@@ -493,6 +493,7 @@ def dashboard(
         .where(or_(Domain.is_default.is_(True), Domain.user_id == user.id))
         .order_by(Domain.is_default.desc(), Domain.created_at.desc())
     ).all()
+    custom_domains = [d for d in domains if not d.is_default]
     verified_domains = [d for d in domains if d.is_default or d.is_verified]
 
     active_mask = None
@@ -562,6 +563,7 @@ def dashboard(
             "unread_counts": unread_counts,
             "default_domain": _normalize_domain(DEFAULT_DOMAIN),
             "domains": domains,
+            "custom_domains": custom_domains,
             "verified_domains": verified_domains,
             "info": request.query_params.get("info"),
             "error": request.query_params.get("error"),
