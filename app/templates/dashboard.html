@@ -140,7 +140,13 @@
           {% for msg in messages %}
             <a class="mail-row {% if active_message and active_message.id == msg.id %}active{% endif %} {% if (not msg.is_outbound) and (not msg.is_read) %}unread{% endif %}" href="/dashboard?selected_mask={{ active_mask.id }}&selected_message={{ msg.id }}">
               <div class="mail-row-main">
-                <span class="mail-from">{{ msg.from_addr if not msg.is_outbound else 'You' }}</span>
+                <span class="mail-from">
+                  {% if msg.is_outbound %}
+                    To: {{ msg.to_addr }}
+                  {% else %}
+                    {{ msg.from_addr }}
+                  {% endif %}
+                </span>
                 <span class="mail-subject">{{ msg.subject }}</span>
                 <span class="mail-preview">{{ msg.text_preview|truncate(100) }}</span>
               </div>
@@ -162,7 +168,11 @@
           <div>
             <h2>{{ active_message.subject }}</h2>
             <p class="subtle"><strong>From:</strong> {{ active_message.from_addr }} | <strong>To:</strong> {{ active_message.to_addr }}</p>
-            <p class="subtle"><strong>Received:</strong> {{ active_message.received_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</p>
+            {% if active_message.is_outbound %}
+              <p class="subtle"><strong>Sent:</strong> {{ active_message.received_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</p>
+            {% else %}
+              <p class="subtle"><strong>Received:</strong> {{ active_message.received_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</p>
+            {% endif %}
           </div>
           <div class="message-actions">
             {% if can_reply_active_mask and not active_message.is_outbound %}
