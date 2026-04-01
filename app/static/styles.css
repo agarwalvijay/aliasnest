@@ -279,25 +279,13 @@ button.danger:hover {
 }
 
 .mail-row.unread {
-  background: #edf4ff;
   border-left: 3px solid var(--accent);
   padding-left: 7px;
 }
 
 .mail-row.unread .mail-from,
 .mail-row.unread .mail-subject {
-  font-weight: 700;
-}
-
-.unread-dot {
-  position: absolute;
-  left: 2px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--accent);
+  font-weight: 600;
 }
 
 .mail-row-main {
@@ -312,18 +300,19 @@ button.danger:hover {
 .mail-subject,
 .mail-preview,
 .mail-time {
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .mail-from {
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .mail-subject {
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .mail-preview,
