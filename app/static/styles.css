@@ -119,6 +119,47 @@ button.danger:hover {
   margin-bottom: 14px;
 }
 
+.heading-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.help-menu {
+  position: relative;
+}
+
+.help-menu summary {
+  list-style: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+
+.help-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.help-card {
+  position: absolute;
+  right: 0;
+  top: 34px;
+  width: min(360px, 80vw);
+  z-index: 10;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  background: var(--card);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
 .domain-card {
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -165,6 +206,13 @@ button.danger:hover {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 10px;
+}
+
+.message-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
 }
 
 pre {

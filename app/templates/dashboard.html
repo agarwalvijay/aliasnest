@@ -22,22 +22,27 @@
       {% if info %}<p class="ok">{{ info }}</p>{% endif %}
       {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
-      <h2>Domains</h2>
-      <article class="domain-card panel">
-        <p><strong>DNS + Network setup (custom domains)</strong></p>
-        <p class="subtle">1) TXT verification record:</p>
-        <p class="mono">Host: _relay-verify.yourdomain.com</p>
-        <p class="subtle">2) MX routing record:</p>
-        <p class="mono">Host: yourdomain.com</p>
-        <p class="mono">Type: MX</p>
-        {% if mx_target_host %}
-          <p class="mono">Value: {{ mx_target_host }}</p>
-          <p class="subtle">3) Ensure {{ mx_target_host }} resolves via A/AAAA to your public IP and your router forwards TCP {{ public_smtp_port }} to this server's SMTP listener.</p>
-        {% else %}
-          <p class="subtle">Value: any valid MX target for your inbound mail host.</p>
-          <p class="subtle">3) Ensure your MX target host resolves via A/AAAA to your public IP and your router forwards TCP {{ public_smtp_port }} to this server's SMTP listener.</p>
-        {% endif %}
-      </article>
+      <div class="heading-row">
+        <h2>Domains</h2>
+        <details class="help-menu">
+          <summary title="Custom domain help">?</summary>
+          <div class="help-card">
+            <p><strong>Custom domain setup</strong></p>
+            <p class="subtle">1) TXT verification record:</p>
+            <p class="mono">Host: _relay-verify.yourdomain.com</p>
+            <p class="subtle">2) MX routing record:</p>
+            <p class="mono">Host: yourdomain.com</p>
+            <p class="mono">Type: MX</p>
+            {% if mx_target_host %}
+              <p class="mono">Value: {{ mx_target_host }}</p>
+              <p class="subtle">3) Ensure {{ mx_target_host }} resolves via A/AAAA to your public IP and your router forwards TCP {{ public_smtp_port }} to this server's SMTP listener.</p>
+            {% else %}
+              <p class="subtle">Value: any valid MX target for your inbound mail host.</p>
+              <p class="subtle">3) Ensure your MX target host resolves via A/AAAA to your public IP and your router forwards TCP {{ public_smtp_port }} to this server's SMTP listener.</p>
+            {% endif %}
+          </div>
+        </details>
+      </div>
 
       <form method="post" action="/domains" class="stack panel">
         <label>Add custom domain
@@ -125,7 +130,13 @@
         <div class="messages">
           {% for msg in messages %}
             <article class="message">
-              <h4>{{ msg.subject }}</h4>
+              <div class="message-head">
+                <h4>{{ msg.subject }}</h4>
+                <form method="post" action="/messages/{{ msg.id }}/delete" class="inline-form">
+                  {% if active_mask %}<input type="hidden" name="selected_mask" value="{{ active_mask.id }}" />{% endif %}
+                  <button type="submit" class="danger">Delete email</button>
+                </form>
+              </div>
               <p><strong>From:</strong> {{ msg.from_addr }}</p>
               <p><strong>To:</strong> {{ msg.to_addr }}</p>
               <p><strong>Received:</strong> {{ msg.received_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</p>

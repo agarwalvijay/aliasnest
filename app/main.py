@@ -8,7 +8,8 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -127,9 +128,19 @@ def _ensure_default_domain():
         db.close()
 
 
+def _ensure_mask_uniqueness_index():
+    db = SessionLocal()
+    try:
+        db.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_mask_local_domain_idx ON masks(local_part, domain)"))
+        db.commit()
+    finally:
+        db.close()
+
+
 @app.on_event("startup")
 def startup_event():
     Base.metadata.create_all(bind=engine)
+    _ensure_mask_uniqueness_index()
     _ensure_default_domain()
     smtp_runtime.start()
 
@@ -356,9 +367,45 @@ def create_mask(
 
     mask = Mask(user_id=user.id, local_part=clean_local, domain=clean_domain)
     db.add(mask)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing = db.scalar(select(Mask).where(Mask.local_part == clean_local, Mask.domain == clean_domain))
+        if existing:
+            return RedirectResponse(url=f"/dashboard?selected_mask={existing.id}&info=Mask+already+exists", status_code=302)
+        return RedirectResponse(url="/dashboard?error=Could+not+create+mask", status_code=302)
     db.refresh(mask)
     return RedirectResponse(url=f"/dashboard?selected_mask={mask.id}&info=Mask+created", status_code=302)
+
+
+@app.post("/messages/{message_id}/delete")
+def delete_message(
+    message_id: int,
+    selected_mask: Optional[int] = Form(None),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    message = db.scalar(
+        select(Message)
+        .join(Mask, Message.mask_id == Mask.id)
+        .where(Message.id == message_id, Mask.user_id == user.id)
+    )
+    if not message:
+        return RedirectResponse(url="/dashboard?error=Message+not+found", status_code=302)
+
+    mask_id = message.mask_id
+    try:
+        raw_file = Path(message.raw_path)
+        if raw_file.exists():
+            raw_file.unlink()
+    except OSError:
+        pass
+
+    db.delete(message)
+    db.commit()
+    keep_mask = selected_mask if selected_mask else mask_id
+    return RedirectResponse(url=f"/dashboard?selected_mask={keep_mask}&info=Message+deleted", status_code=302)
 
 
 @app.post("/masks/{mask_id}/delete")
