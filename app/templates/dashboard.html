@@ -22,6 +22,18 @@
           {% if info %}<p class="ok">{{ info }}</p>{% endif %}
           {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
+          <h3>Timezone</h3>
+          <form method="post" action="/settings/timezone" class="stack panel">
+            <label>Your timezone
+              <select name="timezone" required>
+                {% for tz in timezone_options %}
+                  <option value="{{ tz }}" {% if tz == user_timezone %}selected{% endif %}>{{ tz }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <button type="submit">Save timezone</button>
+          </form>
+
           <div class="heading-row">
             <h3>Domains</h3>
             <details class="help-menu">
@@ -152,7 +164,7 @@
               </div>
               <div class="mail-meta">
                 {% if msg.is_outbound %}<span class="chip chip-sent">Sent</span>{% else %}<span class="chip chip-inbound">Received</span>{% endif %}
-                <span class="mail-time">{{ msg.received_at.strftime('%m/%d %H:%M') }}</span>
+                <span class="mail-time">{{ message_times_short.get(msg.id, '') }}</span>
               </div>
             </a>
           {% endfor %}
@@ -169,9 +181,9 @@
             <h2>{{ active_message.subject }}</h2>
             <p class="subtle"><strong>From:</strong> {{ active_message.from_addr }} | <strong>To:</strong> {{ active_message.to_addr }}</p>
             {% if active_message.is_outbound %}
-              <p class="subtle"><strong>Sent:</strong> {{ active_message.received_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</p>
+              <p class="subtle"><strong>Sent:</strong> {{ message_times_full.get(active_message.id, '') }} {{ user_timezone }}</p>
             {% else %}
-              <p class="subtle"><strong>Received:</strong> {{ active_message.received_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</p>
+              <p class="subtle"><strong>Received:</strong> {{ message_times_full.get(active_message.id, '') }} {{ user_timezone }}</p>
             {% endif %}
           </div>
           <div class="message-actions">

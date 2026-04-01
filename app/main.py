@@ -10,6 +10,7 @@ import secrets
 import smtplib
 from typing import Optional
 import uuid
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
@@ -278,12 +279,42 @@ def _ensure_message_read_column():
         db.close()
 
 
+def _ensure_user_timezone_column():
+    db = SessionLocal()
+    try:
+        table_info = db.execute(text("PRAGMA table_info(users)")).fetchall()
+        existing_columns = {row[1] for row in table_info}
+        if "timezone" not in existing_columns:
+            db.execute(text("ALTER TABLE users ADD COLUMN timezone TEXT NOT NULL DEFAULT 'UTC'"))
+            db.commit()
+    finally:
+        db.close()
+
+
+def _safe_tz_name(tz_name: str) -> str:
+    candidate = (tz_name or "").strip()
+    if not candidate:
+        return "UTC"
+    try:
+        ZoneInfo(candidate)
+        return candidate
+    except ZoneInfoNotFoundError:
+        return "UTC"
+
+
+def _format_dt_for_user(dt: datetime, tz_name: str, fmt: str) -> str:
+    timezone_name = _safe_tz_name(tz_name)
+    localized = dt.replace(tzinfo=ZoneInfo("UTC")).astimezone(ZoneInfo(timezone_name))
+    return localized.strftime(fmt)
+
+
 @app.on_event("startup")
 def startup_event():
     Base.metadata.create_all(bind=engine)
     _ensure_mask_uniqueness_index()
     _ensure_message_is_outbound_column()
     _ensure_message_read_column()
+    _ensure_user_timezone_column()
     _ensure_default_domain()
     smtp_runtime.start()
 
@@ -396,7 +427,7 @@ def register_action(
             status_code=400,
         )
 
-    user = User(email=email, password_hash=hash_password(password))
+    user = User(email=email, password_hash=hash_password(password), timezone="UTC")
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -431,6 +462,21 @@ def logout_action(request: Request):
     return RedirectResponse(url="/login", status_code=302)
 
 
+@app.post("/settings/timezone")
+def update_timezone(
+    timezone: str = Form(...),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    clean_timezone = _safe_tz_name(timezone)
+    db_user = db.get(User, user.id)
+    if not db_user:
+        return RedirectResponse(url="/dashboard?error=User+not+found", status_code=302)
+    db_user.timezone = clean_timezone
+    db.commit()
+    return RedirectResponse(url=f"/dashboard?info=Timezone+updated+to+{clean_timezone.replace('/', '%2F')}", status_code=302)
+
+
 @app.get("/dashboard")
 def dashboard(
     request: Request,
@@ -440,6 +486,7 @@ def dashboard(
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
+    user_timezone = _safe_tz_name(getattr(user, "timezone", "UTC"))
     masks = db.scalars(select(Mask).where(Mask.user_id == user.id).order_by(Mask.created_at.desc())).all()
     domains = db.scalars(
         select(Domain)
@@ -496,6 +543,12 @@ def dashboard(
         reply_all_targets = _compute_reply_targets(active_mask, target_email, to_cc_addresses, True)
         can_reply_all_active_message = len(reply_all_targets) > 1
 
+    message_times_short = {}
+    message_times_full = {}
+    for msg in messages:
+        message_times_short[msg.id] = _format_dt_for_user(msg.received_at, user_timezone, "%m/%d %H:%M")
+        message_times_full[msg.id] = _format_dt_for_user(msg.received_at, user_timezone, "%Y-%m-%d %H:%M:%S")
+
     return templates.TemplateResponse(
         "dashboard.html",
         {
@@ -504,6 +557,8 @@ def dashboard(
             "masks": masks,
             "active_mask": active_mask,
             "messages": messages,
+            "message_times_short": message_times_short,
+            "message_times_full": message_times_full,
             "unread_counts": unread_counts,
             "default_domain": _normalize_domain(DEFAULT_DOMAIN),
             "domains": domains,
@@ -517,6 +572,25 @@ def dashboard(
             "can_reply_all_active_message": can_reply_all_active_message,
             "active_message": active_message,
             "active_message_body": _extract_message_body(active_message) if active_message else "",
+            "user_timezone": user_timezone,
+            "timezone_options": [
+                "UTC",
+                "America/Chicago",
+                "America/New_York",
+                "America/Los_Angeles",
+                "America/Denver",
+                "America/Phoenix",
+                "America/Anchorage",
+                "Pacific/Honolulu",
+                "Europe/London",
+                "Europe/Berlin",
+                "Europe/Paris",
+                "Europe/Amsterdam",
+                "Asia/Kolkata",
+                "Asia/Singapore",
+                "Asia/Tokyo",
+                "Australia/Sydney",
+            ],
             "now": datetime.utcnow(),
         },
     )

@@ -135,17 +135,22 @@ button.danger:hover {
 }
 
 .icon-btn {
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: #fff;
-  color: var(--ink);
+  width: auto;
+  height: auto;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #4b5569;
   display: grid;
   place-items: center;
   cursor: pointer;
-  font-size: 16px;
+  font-size: 27px;
+  line-height: 1;
+}
+
+.icon-btn:hover {
+  color: #111827;
 }
 
 .settings-drawer {
