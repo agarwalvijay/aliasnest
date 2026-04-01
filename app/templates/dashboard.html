@@ -15,166 +15,178 @@
     <a href="/dashboard" class="brand-link"><img src="/static/logo.svg" alt="AliasNest" class="brand-mark" /></a>
     <div class="topbar-right">
       <p class="signed-in">{{ user.email }}</p>
+      <details class="settings-drawer">
+        <summary class="icon-btn" title="Settings">⚙</summary>
+        <div class="settings-panel card">
+          <h2>Settings</h2>
+          {% if info %}<p class="ok">{{ info }}</p>{% endif %}
+          {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+          <div class="heading-row">
+            <h3>Domains</h3>
+            <details class="help-menu">
+              <summary title="Custom domain help">?</summary>
+              <div class="help-card">
+                <p><strong>Custom domain setup</strong></p>
+                <p class="subtle">1) TXT verification record:</p>
+                <p class="mono">Host: _relay-verify.yourdomain.com</p>
+                <p class="subtle">2) MX routing record:</p>
+                <p class="mono">Host: yourdomain.com</p>
+                <p class="mono">Type: MX</p>
+                {% if mx_target_host %}
+                  <p class="mono">Value: {{ mx_target_host }}</p>
+                  <p class="subtle">3) Ensure {{ mx_target_host }} resolves via A/AAAA to your public IP and your router forwards TCP {{ public_smtp_port }} to this server's SMTP listener.</p>
+                {% else %}
+                  <p class="subtle">Value: any valid MX target for your inbound mail host.</p>
+                  <p class="subtle">3) Ensure your MX target host resolves via A/AAAA to your public IP and your router forwards TCP {{ public_smtp_port }} to this server's SMTP listener.</p>
+                {% endif %}
+              </div>
+            </details>
+          </div>
+
+          <form method="post" action="/domains" class="stack panel">
+            <label>Add custom domain
+              <input type="text" name="domain_name" placeholder="example.com" required />
+            </label>
+            <button type="submit">Add domain</button>
+          </form>
+
+          <div class="stack compact-list">
+            {% for domain in domains %}
+              <article class="domain-card">
+                <p class="domain-title"><strong>{{ domain.name }}</strong></p>
+                {% if domain.is_default %}
+                  <p class="subtle">Default domain (always available)</p>
+                {% elif domain.is_verified %}
+                  <p class="ok">Verified</p>
+                  <form method="post" action="/domains/{{ domain.id }}/delete" class="inline-form">
+                    <button type="submit" class="danger">Delete domain</button>
+                  </form>
+                {% else %}
+                  <p class="warn">Pending verification</p>
+                  <p class="subtle">TXT host: <span class="mono">_relay-verify.{{ domain.name }}</span></p>
+                  <p class="subtle">TXT value: <span class="mono">{{ domain.verification_token }}</span></p>
+                  <p class="subtle">MX host: <span class="mono">{{ domain.name }}</span></p>
+                  <p class="subtle">MX type: <span class="mono">MX</span></p>
+                  {% if mx_target_host %}
+                    <p class="subtle">MX value: <span class="mono">{{ mx_target_host }}</span></p>
+                  {% else %}
+                    <p class="subtle">MX value: your inbound mail host</p>
+                  {% endif %}
+                  {% if dns_available %}
+                    <form method="post" action="/domains/{{ domain.id }}/verify" class="inline-form">
+                      <button type="submit">Verify TXT + MX</button>
+                    </form>
+                  {% else %}
+                    <p class="error">Install dnspython to enable in-app verify checks.</p>
+                  {% endif %}
+                  <form method="post" action="/domains/{{ domain.id }}/delete" class="inline-form">
+                    <button type="submit" class="danger">Delete domain</button>
+                  </form>
+                {% endif %}
+              </article>
+            {% endfor %}
+          </div>
+
+          <h3>Create mask</h3>
+          <form method="post" action="/masks" class="stack panel">
+            <label>Local part
+              <input type="text" name="local_part" placeholder="shopping-1" required />
+            </label>
+            <label>Domain
+              <select name="domain_name" required>
+                {% for domain in verified_domains %}
+                  <option value="{{ domain.name }}">{{ domain.name }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <button type="submit">Create mask</button>
+          </form>
+        </div>
+      </details>
       <form method="post" action="/logout" class="inline-form">
         <button type="submit" class="ghost">Sign out</button>
       </form>
     </div>
   </header>
 
-  <main class="grid">
-    <section class="card control-panel">
-      {% if info %}<p class="ok">{{ info }}</p>{% endif %}
-      {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  {% if info %}<p class="banner ok">{{ info }}</p>{% endif %}
+  {% if error %}<p class="banner error">{{ error }}</p>{% endif %}
 
-      <div class="heading-row">
-        <h2>Domains</h2>
-        <details class="help-menu">
-          <summary title="Custom domain help">?</summary>
-          <div class="help-card">
-            <p><strong>Custom domain setup</strong></p>
-            <p class="subtle">1) TXT verification record:</p>
-            <p class="mono">Host: _relay-verify.yourdomain.com</p>
-            <p class="subtle">2) MX routing record:</p>
-            <p class="mono">Host: yourdomain.com</p>
-            <p class="mono">Type: MX</p>
-            {% if mx_target_host %}
-              <p class="mono">Value: {{ mx_target_host }}</p>
-              <p class="subtle">3) Ensure {{ mx_target_host }} resolves via A/AAAA to your public IP and your router forwards TCP {{ public_smtp_port }} to this server's SMTP listener.</p>
-            {% else %}
-              <p class="subtle">Value: any valid MX target for your inbound mail host.</p>
-              <p class="subtle">3) Ensure your MX target host resolves via A/AAAA to your public IP and your router forwards TCP {{ public_smtp_port }} to this server's SMTP listener.</p>
-            {% endif %}
-          </div>
-        </details>
-      </div>
-
-      <form method="post" action="/domains" class="stack panel">
-        <label>Add custom domain
-          <input type="text" name="domain_name" placeholder="example.com" required />
-        </label>
-        <button type="submit">Add domain</button>
-      </form>
-
-      <div class="stack compact-list">
-        {% for domain in domains %}
-          <article class="domain-card">
-            <p class="domain-title"><strong>{{ domain.name }}</strong></p>
-            {% if domain.is_default %}
-              <p class="subtle">Default domain (always available)</p>
-            {% elif domain.is_verified %}
-              <p class="ok">Verified</p>
-              <form method="post" action="/domains/{{ domain.id }}/delete" class="inline-form">
-                <button type="submit" class="danger">Delete domain</button>
-              </form>
-            {% else %}
-              <p class="warn">Pending verification</p>
-              <p class="subtle">TXT host: <span class="mono">_relay-verify.{{ domain.name }}</span></p>
-              <p class="subtle">TXT value: <span class="mono">{{ domain.verification_token }}</span></p>
-              <p class="subtle">MX host: <span class="mono">{{ domain.name }}</span></p>
-              <p class="subtle">MX type: <span class="mono">MX</span></p>
-              {% if mx_target_host %}
-                <p class="subtle">MX value: <span class="mono">{{ mx_target_host }}</span></p>
-              {% else %}
-                <p class="subtle">MX value: your inbound mail host</p>
-              {% endif %}
-              {% if dns_available %}
-                <form method="post" action="/domains/{{ domain.id }}/verify" class="inline-form">
-                  <button type="submit">Verify TXT + MX</button>
-                </form>
-              {% else %}
-                <p class="error">Install dnspython to enable in-app verify checks.</p>
-              {% endif %}
-              <form method="post" action="/domains/{{ domain.id }}/delete" class="inline-form">
-                <button type="submit" class="danger">Delete domain</button>
-              </form>
-            {% endif %}
-          </article>
-        {% endfor %}
-      </div>
-
-      <h2>Create mask</h2>
-      <form method="post" action="/masks" class="stack panel">
-        <label>Local part
-          <input type="text" name="local_part" placeholder="shopping-1" required />
-        </label>
-        <label>Domain
-          <select name="domain_name" required>
-            {% for domain in verified_domains %}
-              <option value="{{ domain.name }}">{{ domain.name }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <button type="submit">Create mask</button>
-      </form>
-
-      <h3>Your masks</h3>
-      <div class="mask-list">
+  <main class="inbox-layout">
+    <section class="card list-pane">
+      <div class="folders-row">
         {% if masks %}
           {% for mask in masks %}
-            <div class="mask-item {% if active_mask and active_mask.id == mask.id %}active{% endif %}">
-              <a class="mask-link" href="/dashboard?selected_mask={{ mask.id }}">
-                {{ mask.local_part }}@{{ mask.domain }}
-              </a>
+            <div class="folder-chip {% if active_mask and active_mask.id == mask.id %}active{% endif %}">
+              <a class="folder-link" href="/dashboard?selected_mask={{ mask.id }}">{{ mask.local_part }}@{{ mask.domain }}</a>
               <form method="post" action="/masks/{{ mask.id }}/delete" class="inline-form">
-                <button type="submit" class="danger">Delete</button>
+                <button type="submit" class="icon-link" title="Delete mask">×</button>
               </form>
             </div>
           {% endfor %}
         {% else %}
-          <p class="subtle">No masks yet.</p>
+          <p class="subtle">No masks yet. Create one from Settings.</p>
+        {% endif %}
+      </div>
+
+      <div class="mail-list">
+        {% if messages %}
+          {% for msg in messages %}
+            <a class="mail-row {% if active_message and active_message.id == msg.id %}active{% endif %}" href="/dashboard?selected_mask={{ active_mask.id }}&selected_message={{ msg.id }}">
+              <div class="mail-row-main">
+                <span class="mail-from">{{ msg.from_addr if not msg.is_outbound else 'You' }}</span>
+                <span class="mail-subject">{{ msg.subject }}</span>
+                <span class="mail-preview">{{ msg.text_preview|truncate(100) }}</span>
+              </div>
+              <div class="mail-meta">
+                {% if msg.is_outbound %}<span class="chip chip-sent">Sent</span>{% else %}<span class="chip chip-inbound">Received</span>{% endif %}
+                <span class="mail-time">{{ msg.received_at.strftime('%m/%d %H:%M') }}</span>
+              </div>
+            </a>
+          {% endfor %}
+        {% else %}
+          <p class="subtle">No messages yet for this mask.</p>
         {% endif %}
       </div>
     </section>
 
-    <section class="card inbox-panel">
-      <h2>Inbox {% if active_mask %}<span class="subtle">{{ active_mask.local_part }}@{{ active_mask.domain }}</span>{% endif %}</h2>
-      {% if messages %}
-        <div class="messages">
-          {% for msg in messages %}
-            <article class="message">
-              <div class="message-head">
-                <div class="message-title-row">
-                  <h4>{{ msg.subject }}</h4>
-                  {% if msg.is_outbound %}
-                    <span class="chip chip-sent">Sent</span>
-                  {% else %}
-                    <span class="chip chip-inbound">Received</span>
-                  {% endif %}
-                </div>
-                <div class="message-actions">
-                  {% if can_reply_active_mask and not msg.is_outbound %}
-                    <details class="reply-menu">
-                      <summary class="action-link">Reply</summary>
-                      <form method="post" action="/messages/{{ msg.id }}/reply" class="stack reply-form">
-                        {% if active_mask %}<input type="hidden" name="selected_mask" value="{{ active_mask.id }}" />{% endif %}
-                        <label>Reply message
-                          <textarea name="reply_body" rows="4" required placeholder="Write your reply..."></textarea>
-                        </label>
-                        <button type="submit">Send reply</button>
-                      </form>
-                    </details>
-                  {% elif msg.is_outbound %}
-                    <span class="subtle">Sent message</span>
-                  {% else %}
-                    <span class="subtle">Reply unavailable for this domain</span>
-                  {% endif %}
-                  <form method="post" action="/messages/{{ msg.id }}/delete" class="inline-form">
-                    {% if active_mask %}<input type="hidden" name="selected_mask" value="{{ active_mask.id }}" />{% endif %}
-                    <button type="submit" class="danger">Delete email</button>
-                  </form>
-                </div>
-              </div>
-              <p><strong>From:</strong> {{ msg.from_addr }}</p>
-              <p><strong>To:</strong> {{ msg.to_addr }}</p>
-              <p><strong>Received:</strong> {{ msg.received_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</p>
-              {% if msg.text_preview %}
-                <pre>{{ msg.text_preview }}</pre>
-              {% endif %}
-            </article>
-          {% endfor %}
+    <section class="card read-pane">
+      {% if active_message %}
+        <div class="read-head">
+          <div>
+            <h2>{{ active_message.subject }}</h2>
+            <p class="subtle"><strong>From:</strong> {{ active_message.from_addr }} | <strong>To:</strong> {{ active_message.to_addr }}</p>
+            <p class="subtle"><strong>Received:</strong> {{ active_message.received_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</p>
+          </div>
+          <div class="message-actions">
+            {% if can_reply_active_mask and not active_message.is_outbound %}
+              <details class="reply-menu">
+                <summary class="action-link">Reply</summary>
+                <form method="post" action="/messages/{{ active_message.id }}/reply" class="stack reply-form">
+                  {% if active_mask %}<input type="hidden" name="selected_mask" value="{{ active_mask.id }}" />{% endif %}
+                  <label>Reply message
+                    <textarea name="reply_body" rows="5" required placeholder="Write your reply..."></textarea>
+                  </label>
+                  <button type="submit">Send reply</button>
+                </form>
+              </details>
+            {% elif active_message.is_outbound %}
+              <span class="subtle">Sent message</span>
+            {% else %}
+              <span class="subtle">Reply unavailable for this domain</span>
+            {% endif %}
+
+            <form method="post" action="/messages/{{ active_message.id }}/delete" class="inline-form">
+              {% if active_mask %}<input type="hidden" name="selected_mask" value="{{ active_mask.id }}" />{% endif %}
+              <button type="submit" class="danger">Delete email</button>
+            </form>
+          </div>
         </div>
+
+        <pre class="mail-body">{{ active_message_body }}</pre>
       {% else %}
-        <p class="subtle">No messages yet for this mask.</p>
+        <p class="subtle">Select an email to read it here.</p>
       {% endif %}
     </section>
   </main>

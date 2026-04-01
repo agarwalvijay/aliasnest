@@ -140,6 +140,27 @@ def _reply_metadata(message: Message) -> tuple[str, str, str, str]:
     return reply_address, message_id.strip(), references.strip(), subject
 
 
+def _extract_message_body(message: Message) -> str:
+    try:
+        raw_path = Path(message.raw_path)
+        if not raw_path.exists():
+            return message.text_preview or ""
+        parsed = BytesParser(policy=policy.default).parsebytes(raw_path.read_bytes())
+        if parsed.is_multipart():
+            for part in parsed.walk():
+                if part.get_content_type() == "text/plain":
+                    content = part.get_content()
+                    if content:
+                        return str(content).strip()
+        elif parsed.get_content_type() == "text/plain":
+            content = parsed.get_content()
+            if content:
+                return str(content).strip()
+    except Exception:
+        pass
+    return message.text_preview or ""
+
+
 def _send_reply_email(mask: Mask, target_email: str, reply_body: str, in_reply_to: str, references: str, original_subject: str):
     subject = original_subject.strip() if original_subject else "(No Subject)"
     if not subject.lower().startswith("re:"):
@@ -383,6 +404,7 @@ def logout_action(request: Request):
 def dashboard(
     request: Request,
     selected_mask: Optional[int] = None,
+    selected_message: Optional[int] = None,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
@@ -409,6 +431,16 @@ def dashboard(
             .limit(100)
         ).all()
 
+    active_message = None
+    if active_mask and messages:
+        if selected_message:
+            active_message = db.scalar(
+                select(Message)
+                .where(Message.id == selected_message, Message.mask_id == active_mask.id)
+            )
+        if not active_message:
+            active_message = messages[0]
+
     return templates.TemplateResponse(
         "dashboard.html",
         {
@@ -426,6 +458,8 @@ def dashboard(
             "mx_target_host": MX_TARGET_HOST,
             "public_smtp_port": PUBLIC_SMTP_PORT,
             "can_reply_active_mask": bool(active_mask and _can_send_from_domain(active_mask.domain)),
+            "active_message": active_message,
+            "active_message_body": _extract_message_body(active_message) if active_message else "",
             "now": datetime.utcnow(),
         },
     )
