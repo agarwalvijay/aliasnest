@@ -3,14 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Login | Relay</title>
+  <title>Sign In | AliasNest</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
   <main class="auth-shell">
+    <section class="auth-hero">
+      <img src="/static/logo.svg" alt="AliasNest" class="brand-mark" />
+      <h1 class="hero-title">Private email aliases, organized.</h1>
+      <p class="hero-subtle">AliasNest lets you create disposable masks and manage inbound mail from one clean inbox.</p>
+    </section>
+
     <section class="card auth-card">
-      <h1>Sign in</h1>
-      <p class="subtle">Home-hosted relay dashboard</p>
+      <h2>Sign in</h2>
+      <p class="subtle">Welcome back to AliasNest</p>
       {% if error %}<p class="error">{{ error }}</p>{% endif %}
       <form method="post" action="/login" class="stack">
         <label>Email
@@ -19,9 +29,9 @@
         <label>Password
           <input type="password" name="password" required />
         </label>
-        <button type="submit">Login</button>
+        <button type="submit">Sign in</button>
       </form>
-      <p class="subtle">No account? <a href="/register">Create one</a></p>
+      <p class="subtle auth-foot">No account? <a href="/register">Create one</a></p>
     </section>
   </main>
 </body>

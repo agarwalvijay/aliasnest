@@ -3,13 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Register | Relay</title>
+  <title>Create Account | AliasNest</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
   <main class="auth-shell">
+    <section class="auth-hero">
+      <img src="/static/logo.svg" alt="AliasNest" class="brand-mark" />
+      <h1 class="hero-title">Create your alias workspace.</h1>
+      <p class="hero-subtle">Set up your account to start creating masks, protecting your inbox, and controlling message visibility.</p>
+    </section>
+
     <section class="card auth-card">
-      <h1>Create account</h1>
+      <h2>Create account</h2>
       <p class="subtle">Use this account to manage your masks</p>
       {% if error %}<p class="error">{{ error }}</p>{% endif %}
       <form method="post" action="/register" class="stack">
@@ -35,7 +45,7 @@
           <p class="subtle">New registrations are currently disabled.</p>
         {% endif %}
       {% endif %}
-      <p class="subtle">Already registered? <a href="/login">Sign in</a></p>
+      <p class="subtle auth-foot">Already registered? <a href="/login">Sign in</a></p>
     </section>
   </main>
 </body>

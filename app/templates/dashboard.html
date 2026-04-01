@@ -3,22 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dashboard | Relay</title>
+  <title>Dashboard | AliasNest</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
   <header class="topbar">
-    <div>
-      <h1>Relay Dashboard</h1>
-      <p class="subtle">Signed in as {{ user.email }}</p>
+    <a href="/dashboard" class="brand-link"><img src="/static/logo.svg" alt="AliasNest" class="brand-mark" /></a>
+    <div class="topbar-right">
+      <p class="signed-in">{{ user.email }}</p>
+      <form method="post" action="/logout" class="inline-form">
+        <button type="submit" class="ghost">Sign out</button>
+      </form>
     </div>
-    <form method="post" action="/logout">
-      <button type="submit" class="ghost">Logout</button>
-    </form>
   </header>
 
   <main class="grid">
-    <section class="card">
+    <section class="card control-panel">
       {% if info %}<p class="ok">{{ info }}</p>{% endif %}
       {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
@@ -51,10 +55,10 @@
         <button type="submit">Add domain</button>
       </form>
 
-      <div class="stack">
+      <div class="stack compact-list">
         {% for domain in domains %}
           <article class="domain-card">
-            <p><strong>{{ domain.name }}</strong></p>
+            <p class="domain-title"><strong>{{ domain.name }}</strong></p>
             {% if domain.is_default %}
               <p class="subtle">Default domain (always available)</p>
             {% elif domain.is_verified %}
@@ -64,19 +68,17 @@
               </form>
             {% else %}
               <p class="warn">Pending verification</p>
-              <p class="subtle">Create TXT record:</p>
-              <p class="mono">Host: _relay-verify.{{ domain.name }}</p>
-              <p class="mono">Value: {{ domain.verification_token }}</p>
-              <p class="subtle">Create MX record:</p>
-              <p class="mono">Host: {{ domain.name }}</p>
-              <p class="mono">Type: MX</p>
+              <p class="subtle">TXT host: <span class="mono">_relay-verify.{{ domain.name }}</span></p>
+              <p class="subtle">TXT value: <span class="mono">{{ domain.verification_token }}</span></p>
+              <p class="subtle">MX host: <span class="mono">{{ domain.name }}</span></p>
+              <p class="subtle">MX type: <span class="mono">MX</span></p>
               {% if mx_target_host %}
-                <p class="mono">Value: {{ mx_target_host }}</p>
+                <p class="subtle">MX value: <span class="mono">{{ mx_target_host }}</span></p>
               {% else %}
-                <p class="subtle">Value: your inbound mail host (the host that points to your server IP)</p>
+                <p class="subtle">MX value: your inbound mail host</p>
               {% endif %}
               {% if dns_available %}
-                <form method="post" action="/domains/{{ domain.id }}/verify">
+                <form method="post" action="/domains/{{ domain.id }}/verify" class="inline-form">
                   <button type="submit">Verify TXT + MX</button>
                 </form>
               {% else %}
@@ -124,8 +126,8 @@
       </div>
     </section>
 
-    <section class="card">
-      <h2>Inbox {% if active_mask %}for {{ active_mask.local_part }}@{{ active_mask.domain }}{% endif %}</h2>
+    <section class="card inbox-panel">
+      <h2>Inbox {% if active_mask %}<span class="subtle">{{ active_mask.local_part }}@{{ active_mask.domain }}</span>{% endif %}</h2>
       {% if messages %}
         <div class="messages">
           {% for msg in messages %}
