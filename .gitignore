@@ -4,3 +4,4 @@ __pycache__/
 app/data/app.db
 app/data/messages/*.eml
 .env
+.venv/
