@@ -133,9 +133,16 @@
           {% for msg in messages %}
             <article class="message">
               <div class="message-head">
-                <h4>{{ msg.subject }}</h4>
+                <div class="message-title-row">
+                  <h4>{{ msg.subject }}</h4>
+                  {% if msg.is_outbound %}
+                    <span class="chip chip-sent">Sent</span>
+                  {% else %}
+                    <span class="chip chip-inbound">Received</span>
+                  {% endif %}
+                </div>
                 <div class="message-actions">
-                  {% if can_reply_active_mask %}
+                  {% if can_reply_active_mask and not msg.is_outbound %}
                     <details class="reply-menu">
                       <summary class="action-link">Reply</summary>
                       <form method="post" action="/messages/{{ msg.id }}/reply" class="stack reply-form">
@@ -146,6 +153,8 @@
                         <button type="submit">Send reply</button>
                       </form>
                     </details>
+                  {% elif msg.is_outbound %}
+                    <span class="subtle">Sent message</span>
                   {% else %}
                     <span class="subtle">Reply unavailable for this domain</span>
                   {% endif %}

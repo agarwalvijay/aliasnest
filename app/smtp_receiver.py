@@ -58,6 +58,7 @@ class MaskSMTPHandler:
                     to_addr=recipient[:500],
                     subject=subject,
                     text_preview=_extract_preview(envelope.content),
+                    is_outbound=False,
                     raw_path=raw_path.as_posix(),
                 )
                 db.add(message)

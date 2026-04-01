@@ -3,11 +3,13 @@ from email import policy
 from email.message import EmailMessage
 from email.parser import BytesParser
 from email.utils import parseaddr
+import logging
 from pathlib import Path
 import re
 import secrets
 import smtplib
 from typing import Optional
+import uuid
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
@@ -22,6 +24,7 @@ from .auth import hash_password, verify_password
 from .config import (
     ALLOWED_SIGNUP_EMAILS,
     DEFAULT_DOMAIN,
+    MESSAGE_DIR,
     MX_TARGET_HOST,
     OUTBOUND_ALLOWED_DOMAINS,
     OUTBOUND_FROM_NAME,
@@ -55,6 +58,7 @@ except ImportError:
 
 app = FastAPI(title="Home Email Relay MVP")
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+logger = logging.getLogger(__name__)
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
@@ -161,6 +165,7 @@ def _send_reply_email(mask: Mask, target_email: str, reply_body: str, in_reply_t
             smtp.starttls()
         smtp.login(OUTBOUND_SMTP_USER, OUTBOUND_SMTP_PASS)
         smtp.send_message(msg)
+    return msg, sender, subject
 
 
 def _ensure_default_domain():
@@ -208,10 +213,25 @@ def _ensure_mask_uniqueness_index():
         db.close()
 
 
+def _ensure_message_is_outbound_column():
+    db = SessionLocal()
+    try:
+        table_info = db.execute(text("PRAGMA table_info(messages)")).fetchall()
+        existing_columns = {row[1] for row in table_info}
+        if "is_outbound" not in existing_columns:
+            db.execute(text("ALTER TABLE messages ADD COLUMN is_outbound INTEGER NOT NULL DEFAULT 0"))
+            db.commit()
+        db.execute(text("CREATE INDEX IF NOT EXISTS ix_messages_is_outbound ON messages(is_outbound)"))
+        db.commit()
+    finally:
+        db.close()
+
+
 @app.on_event("startup")
 def startup_event():
     Base.metadata.create_all(bind=engine)
     _ensure_mask_uniqueness_index()
+    _ensure_message_is_outbound_column()
     _ensure_default_domain()
     smtp_runtime.start()
 
@@ -495,6 +515,8 @@ def reply_message(
     )
     if not message:
         return RedirectResponse(url="/dashboard?error=Message+not+found", status_code=302)
+    if message.is_outbound:
+        return RedirectResponse(url="/dashboard?error=Cannot+reply+to+an+outbound+message+entry", status_code=302)
 
     mask = db.get(Mask, message.mask_id)
     if not mask:
@@ -511,9 +533,41 @@ def reply_message(
         return RedirectResponse(url=f"/dashboard?selected_mask={mask.id}&error=Could+not+resolve+reply+recipient", status_code=302)
 
     try:
-        _send_reply_email(mask, target_email, cleaned_reply, in_reply_to, references, original_subject)
-    except Exception:
-        return RedirectResponse(url=f"/dashboard?selected_mask={mask.id}&error=Failed+to+send+reply+via+outbound+SMTP", status_code=302)
+        sent_msg, sender, sent_subject = _send_reply_email(mask, target_email, cleaned_reply, in_reply_to, references, original_subject)
+    except Exception as exc:
+        logger.exception(
+            "Failed outbound reply send. mask_id=%s mask_domain=%s recipient=%s",
+            mask.id,
+            mask.domain,
+            target_email,
+        )
+        error_text = str(exc).lower()
+        if "authentication" in error_text or "auth" in error_text:
+            msg = "SMTP+authentication+failed.+Check+SES+SMTP+username/password"
+        elif "sandbox" in error_text:
+            msg = "SES+sandbox+restriction.+Verify+recipient+or+request+production+access"
+        elif "domain" in error_text or "identity" in error_text:
+            msg = "SES+identity+not+verified+for+this+sender+domain+in+this+region"
+        else:
+            msg = "Failed+to+send+reply+via+outbound+SMTP"
+        return RedirectResponse(url=f"/dashboard?selected_mask={mask.id}&error={msg}", status_code=302)
+
+    # Persist outbound reply in the same mask timeline for auditability and continuity.
+    MESSAGE_DIR.mkdir(parents=True, exist_ok=True)
+    outbound_raw_path = MESSAGE_DIR / f"{uuid.uuid4().hex}.eml"
+    outbound_raw_path.write_bytes(sent_msg.as_bytes())
+    db.add(
+        Message(
+            mask_id=mask.id,
+            from_addr=sender[:500],
+            to_addr=target_email[:500],
+            subject=sent_subject[:500],
+            text_preview=cleaned_reply[:2000],
+            is_outbound=True,
+            raw_path=outbound_raw_path.as_posix(),
+        )
+    )
+    db.commit()
 
     keep_mask = selected_mask if selected_mask else mask.id
     return RedirectResponse(url=f"/dashboard?selected_mask={keep_mask}&info=Reply+sent", status_code=302)

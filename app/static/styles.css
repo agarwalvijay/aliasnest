@@ -298,9 +298,34 @@ button.danger:hover {
 .message-head {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   margin-bottom: 6px;
+}
+
+.message-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chip-sent {
+  color: #0b6bce;
+  background: #eaf3ff;
+}
+
+.chip-inbound {
+  color: #0f8f76;
+  background: #e8f8f3;
 }
 
 .message-actions {

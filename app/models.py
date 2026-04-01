@@ -58,6 +58,7 @@ class Message(Base):
     to_addr: Mapped[str] = mapped_column(String(500), index=True)
     subject: Mapped[str] = mapped_column(String(500), default="(No Subject)")
     text_preview: Mapped[str] = mapped_column(Text, default="")
+    is_outbound: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     raw_path: Mapped[str] = mapped_column(String(600))
     received_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
