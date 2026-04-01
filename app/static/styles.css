@@ -220,6 +220,23 @@ button.danger:hover {
   color: var(--ink);
   font-size: 13px;
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.unread-badge {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent);
 }
 
 .icon-link {
@@ -257,6 +274,15 @@ button.danger:hover {
 
 .mail-row.active {
   background: #eaf2fd;
+}
+
+.mail-row.unread {
+  background: #f4f9ff;
+}
+
+.mail-row.unread .mail-from,
+.mail-row.unread .mail-subject {
+  font-weight: 700;
 }
 
 .mail-row-main {

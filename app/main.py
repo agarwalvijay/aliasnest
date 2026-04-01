@@ -15,7 +15,7 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import or_, select, text
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
@@ -248,11 +248,26 @@ def _ensure_message_is_outbound_column():
         db.close()
 
 
+def _ensure_message_read_column():
+    db = SessionLocal()
+    try:
+        table_info = db.execute(text("PRAGMA table_info(messages)")).fetchall()
+        existing_columns = {row[1] for row in table_info}
+        if "is_read" not in existing_columns:
+            db.execute(text("ALTER TABLE messages ADD COLUMN is_read INTEGER NOT NULL DEFAULT 0"))
+            db.commit()
+        db.execute(text("CREATE INDEX IF NOT EXISTS ix_messages_is_read ON messages(is_read)"))
+        db.commit()
+    finally:
+        db.close()
+
+
 @app.on_event("startup")
 def startup_event():
     Base.metadata.create_all(bind=engine)
     _ensure_mask_uniqueness_index()
     _ensure_message_is_outbound_column()
+    _ensure_message_read_column()
     _ensure_default_domain()
     smtp_runtime.start()
 
@@ -431,6 +446,20 @@ def dashboard(
             .limit(100)
         ).all()
 
+    unread_counts = {}
+    unread_rows = db.execute(
+        select(Message.mask_id, func.count(Message.id))
+        .join(Mask, Message.mask_id == Mask.id)
+        .where(
+            Mask.user_id == user.id,
+            Message.is_outbound.is_(False),
+            Message.is_read.is_(False),
+        )
+        .group_by(Message.mask_id)
+    ).all()
+    for mask_id, count in unread_rows:
+        unread_counts[mask_id] = count
+
     active_message = None
     if active_mask and messages:
         if selected_message:
@@ -440,6 +469,10 @@ def dashboard(
             )
         if not active_message:
             active_message = messages[0]
+        if active_message and (not active_message.is_outbound) and (not active_message.is_read):
+            active_message.is_read = True
+            db.commit()
+            active_message = db.get(Message, active_message.id)
 
     return templates.TemplateResponse(
         "dashboard.html",
@@ -449,6 +482,7 @@ def dashboard(
             "masks": masks,
             "active_mask": active_mask,
             "messages": messages,
+            "unread_counts": unread_counts,
             "default_domain": _normalize_domain(DEFAULT_DOMAIN),
             "domains": domains,
             "verified_domains": verified_domains,
@@ -534,6 +568,47 @@ def delete_message(
     return RedirectResponse(url=f"/dashboard?selected_mask={keep_mask}&info=Message+deleted", status_code=302)
 
 
+@app.post("/messages/{message_id}/mark-read")
+def mark_message_read(
+    message_id: int,
+    selected_mask: Optional[int] = Form(None),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    message = db.scalar(
+        select(Message)
+        .join(Mask, Message.mask_id == Mask.id)
+        .where(Message.id == message_id, Mask.user_id == user.id)
+    )
+    if not message:
+        return RedirectResponse(url="/dashboard?error=Message+not+found", status_code=302)
+    message.is_read = True
+    db.commit()
+    keep_mask = selected_mask if selected_mask else message.mask_id
+    return RedirectResponse(url=f"/dashboard?selected_mask={keep_mask}&selected_message={message.id}&info=Marked+as+read", status_code=302)
+
+
+@app.post("/messages/{message_id}/mark-unread")
+def mark_message_unread(
+    message_id: int,
+    selected_mask: Optional[int] = Form(None),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    message = db.scalar(
+        select(Message)
+        .join(Mask, Message.mask_id == Mask.id)
+        .where(Message.id == message_id, Mask.user_id == user.id)
+    )
+    if not message:
+        return RedirectResponse(url="/dashboard?error=Message+not+found", status_code=302)
+    if not message.is_outbound:
+        message.is_read = False
+        db.commit()
+    keep_mask = selected_mask if selected_mask else message.mask_id
+    return RedirectResponse(url=f"/dashboard?selected_mask={keep_mask}&selected_message={message.id}&info=Marked+as+unread", status_code=302)
+
+
 @app.post("/messages/{message_id}/reply")
 def reply_message(
     message_id: int,
@@ -598,6 +673,7 @@ def reply_message(
             subject=sent_subject[:500],
             text_preview=cleaned_reply[:2000],
             is_outbound=True,
+            is_read=True,
             raw_path=outbound_raw_path.as_posix(),
         )
     )
