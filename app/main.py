@@ -1,0 +1,408 @@
+from datetime import datetime
+from pathlib import Path
+import re
+import secrets
+from typing import Optional
+
+from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from sqlalchemy import or_, select
+from sqlalchemy.orm import Session
+from starlette.middleware.sessions import SessionMiddleware
+
+from .auth import hash_password, verify_password
+from .config import DEFAULT_DOMAIN, MX_TARGET_HOST, PUBLIC_SMTP_PORT, SECRET_KEY, SMTP_HOST, SMTP_PORT
+from .database import Base, SessionLocal, engine, get_db
+from .models import Domain, Mask, Message, User
+from .smtp_receiver import SMTPServerRuntime
+
+try:
+    import dns.resolver
+    from dns.exception import DNSException
+
+    DNS_AVAILABLE = True
+except ImportError:
+    DNS_AVAILABLE = False
+
+    class DNSException(Exception):
+        pass
+
+
+app = FastAPI(title="Home Email Relay MVP")
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+
+templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
+
+smtp_runtime = SMTPServerRuntime(SMTP_HOST, SMTP_PORT)
+
+
+def _normalize_domain(domain: str) -> str:
+    return domain.strip().lower().rstrip(".")
+
+
+def _is_valid_local_part(local_part: str) -> bool:
+    return bool(re.fullmatch(r"[a-zA-Z0-9._+-]{2,64}", local_part))
+
+
+def _is_valid_domain(domain: str) -> bool:
+    return bool(
+        re.fullmatch(
+            r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}",
+            domain,
+        )
+    )
+
+
+def _generate_domain_token() -> str:
+    return f"relay-verify-{secrets.token_urlsafe(18)}"
+
+
+def _extract_txt_values(txt_answers) -> set[str]:
+    values = set()
+    for answer in txt_answers:
+        if hasattr(answer, "strings"):
+            value = b"".join(answer.strings).decode("utf-8", errors="ignore")
+        else:
+            value = str(answer).replace('"', "")
+        values.add(value.strip())
+    return values
+
+
+def _extract_mx_hosts(mx_answers) -> set[str]:
+    hosts = set()
+    for answer in mx_answers:
+        exchange = getattr(answer, "exchange", None)
+        value = str(exchange or answer).strip().lower().rstrip(".")
+        if value:
+            hosts.add(value)
+    return hosts
+
+
+def _ensure_default_domain():
+    db = SessionLocal()
+    try:
+        normalized_default = _normalize_domain(DEFAULT_DOMAIN)
+        # Keep exactly one shared default domain.
+        existing_defaults = db.scalars(select(Domain).where(Domain.is_default.is_(True))).all()
+        for default_domain in existing_defaults:
+            if default_domain.name != normalized_default:
+                default_domain.is_default = False
+
+        existing = db.scalar(select(Domain).where(Domain.name == normalized_default))
+        if existing:
+            existing.is_default = True
+            existing.is_verified = True
+            existing.user_id = None
+            if not existing.verified_at:
+                existing.verified_at = datetime.utcnow()
+            if not existing.verification_token:
+                existing.verification_token = _generate_domain_token()
+            db.commit()
+            return
+
+        domain = Domain(
+            user_id=None,
+            name=normalized_default,
+            verification_token=_generate_domain_token(),
+            is_default=True,
+            is_verified=True,
+            verified_at=datetime.utcnow(),
+        )
+        db.add(domain)
+        db.commit()
+    finally:
+        db.close()
+
+
+@app.on_event("startup")
+def startup_event():
+    Base.metadata.create_all(bind=engine)
+    _ensure_default_domain()
+    smtp_runtime.start()
+
+
+@app.on_event("shutdown")
+def shutdown_event():
+    smtp_runtime.stop()
+
+
+def current_user(request: Request, db: Session = Depends(get_db)) -> Optional[User]:
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return None
+    return db.get(User, user_id)
+
+
+def require_user(user: Optional[User] = Depends(current_user)) -> User:
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user
+
+
+@app.get("/")
+def root(request: Request, user: Optional[User] = Depends(current_user)):
+    if user:
+        return RedirectResponse(url="/dashboard", status_code=302)
+    return RedirectResponse(url="/login", status_code=302)
+
+
+@app.get("/register")
+def register_page(request: Request):
+    return templates.TemplateResponse("register.html", {"request": request, "error": None})
+
+
+@app.post("/register")
+def register_action(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    email = email.strip().lower()
+    if len(password) < 8:
+        return templates.TemplateResponse("register.html", {"request": request, "error": "Password must be at least 8 characters."}, status_code=400)
+
+    existing = db.scalar(select(User).where(User.email == email))
+    if existing:
+        return templates.TemplateResponse("register.html", {"request": request, "error": "Email already registered."}, status_code=400)
+
+    user = User(email=email, password_hash=hash_password(password))
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    request.session["user_id"] = user.id
+    return RedirectResponse(url="/dashboard", status_code=302)
+
+
+@app.get("/login")
+def login_page(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request, "error": None})
+
+
+@app.post("/login")
+def login_action(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    email = email.strip().lower()
+    user = db.scalar(select(User).where(User.email == email))
+    if not user or not verify_password(password, user.password_hash):
+        return templates.TemplateResponse("login.html", {"request": request, "error": "Invalid credentials."}, status_code=400)
+
+    request.session["user_id"] = user.id
+    return RedirectResponse(url="/dashboard", status_code=302)
+
+
+@app.post("/logout")
+def logout_action(request: Request):
+    request.session.clear()
+    return RedirectResponse(url="/login", status_code=302)
+
+
+@app.get("/dashboard")
+def dashboard(
+    request: Request,
+    selected_mask: Optional[int] = None,
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    masks = db.scalars(select(Mask).where(Mask.user_id == user.id).order_by(Mask.created_at.desc())).all()
+    domains = db.scalars(
+        select(Domain)
+        .where(or_(Domain.is_default.is_(True), Domain.user_id == user.id))
+        .order_by(Domain.is_default.desc(), Domain.created_at.desc())
+    ).all()
+    verified_domains = [d for d in domains if d.is_default or d.is_verified]
+
+    active_mask = None
+    if selected_mask:
+        active_mask = db.scalar(select(Mask).where(Mask.id == selected_mask, Mask.user_id == user.id))
+    if not active_mask and masks:
+        active_mask = masks[0]
+
+    messages = []
+    if active_mask:
+        messages = db.scalars(
+            select(Message)
+            .where(Message.mask_id == active_mask.id)
+            .order_by(Message.received_at.desc())
+            .limit(100)
+        ).all()
+
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {
+            "request": request,
+            "user": user,
+            "masks": masks,
+            "active_mask": active_mask,
+            "messages": messages,
+            "default_domain": _normalize_domain(DEFAULT_DOMAIN),
+            "domains": domains,
+            "verified_domains": verified_domains,
+            "info": request.query_params.get("info"),
+            "error": request.query_params.get("error"),
+            "dns_available": DNS_AVAILABLE,
+            "mx_target_host": MX_TARGET_HOST,
+            "public_smtp_port": PUBLIC_SMTP_PORT,
+            "now": datetime.utcnow(),
+        },
+    )
+
+
+@app.post("/masks")
+def create_mask(
+    local_part: str = Form(...),
+    domain_name: str = Form(...),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    clean_local = local_part.strip().lower()
+    clean_domain = _normalize_domain(domain_name)
+    if not _is_valid_local_part(clean_local):
+        return RedirectResponse(url="/dashboard?error=Invalid+mask+name", status_code=302)
+
+    selected_domain = db.scalar(
+        select(Domain).where(
+            Domain.name == clean_domain,
+            Domain.is_verified.is_(True),
+            or_(Domain.is_default.is_(True), Domain.user_id == user.id),
+        )
+    )
+    if not selected_domain:
+        return RedirectResponse(url="/dashboard?error=Domain+is+not+verified+or+not+available", status_code=302)
+
+    existing = db.scalar(select(Mask).where(Mask.local_part == clean_local, Mask.domain == clean_domain))
+    if existing:
+        return RedirectResponse(url=f"/dashboard?selected_mask={existing.id}&info=Mask+already+exists", status_code=302)
+
+    mask = Mask(user_id=user.id, local_part=clean_local, domain=clean_domain)
+    db.add(mask)
+    db.commit()
+    db.refresh(mask)
+    return RedirectResponse(url=f"/dashboard?selected_mask={mask.id}&info=Mask+created", status_code=302)
+
+
+@app.post("/masks/{mask_id}/delete")
+def delete_mask(
+    mask_id: int,
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    mask = db.scalar(select(Mask).where(Mask.id == mask_id, Mask.user_id == user.id))
+    if not mask:
+        return RedirectResponse(url="/dashboard?error=Mask+not+found", status_code=302)
+
+    messages = db.scalars(select(Message).where(Message.mask_id == mask.id)).all()
+    for message in messages:
+        try:
+            raw_file = Path(message.raw_path)
+            if raw_file.exists():
+                raw_file.unlink()
+        except OSError:
+            pass
+        db.delete(message)
+
+    db.delete(mask)
+    db.commit()
+    return RedirectResponse(url="/dashboard?info=Mask+deleted", status_code=302)
+
+
+@app.post("/domains")
+def add_domain(
+    domain_name: str = Form(...),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    clean_domain = _normalize_domain(domain_name)
+    if not _is_valid_domain(clean_domain):
+        return RedirectResponse(url="/dashboard?error=Invalid+domain+format", status_code=302)
+
+    existing = db.scalar(select(Domain).where(Domain.name == clean_domain))
+    if existing:
+        if existing.user_id == user.id or existing.is_default:
+            return RedirectResponse(url="/dashboard?info=Domain+already+added", status_code=302)
+        return RedirectResponse(url="/dashboard?error=Domain+is+already+claimed+by+another+user", status_code=302)
+
+    domain = Domain(
+        user_id=user.id,
+        name=clean_domain,
+        verification_token=_generate_domain_token(),
+        is_default=False,
+        is_verified=False,
+    )
+    db.add(domain)
+    db.commit()
+    return RedirectResponse(url="/dashboard?info=Domain+added.+Publish+TXT+record+then+verify", status_code=302)
+
+
+@app.post("/domains/{domain_id}/delete")
+def delete_domain(
+    domain_id: int,
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    domain = db.scalar(select(Domain).where(Domain.id == domain_id, Domain.user_id == user.id))
+    if not domain:
+        return RedirectResponse(url="/dashboard?error=Domain+not+found", status_code=302)
+    if domain.is_default:
+        return RedirectResponse(url="/dashboard?error=Default+domain+cannot+be+deleted", status_code=302)
+
+    mask_exists = db.scalar(select(Mask).where(Mask.domain == domain.name))
+    if mask_exists:
+        return RedirectResponse(url="/dashboard?error=Delete+masks+on+this+domain+first", status_code=302)
+
+    db.delete(domain)
+    db.commit()
+    return RedirectResponse(url="/dashboard?info=Domain+deleted", status_code=302)
+
+
+@app.post("/domains/{domain_id}/verify")
+def verify_domain(
+    domain_id: int,
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    domain = db.scalar(select(Domain).where(Domain.id == domain_id, Domain.user_id == user.id))
+    if not domain:
+        return RedirectResponse(url="/dashboard?error=Domain+not+found", status_code=302)
+    if domain.is_verified:
+        return RedirectResponse(url="/dashboard?info=Domain+already+verified", status_code=302)
+    if not DNS_AVAILABLE:
+        return RedirectResponse(url="/dashboard?error=DNS+verification+requires+dnspython", status_code=302)
+
+    verify_host = f"_relay-verify.{domain.name}"
+    try:
+        txt_answers = dns.resolver.resolve(verify_host, "TXT")
+        txt_values = _extract_txt_values(txt_answers)
+    except DNSException:
+        return RedirectResponse(url="/dashboard?error=TXT+record+not+found+yet", status_code=302)
+
+    if domain.verification_token not in txt_values:
+        return RedirectResponse(url="/dashboard?error=TXT+token+mismatch", status_code=302)
+
+    try:
+        mx_answers = dns.resolver.resolve(domain.name, "MX")
+        mx_hosts = _extract_mx_hosts(mx_answers)
+    except DNSException:
+        return RedirectResponse(url="/dashboard?error=MX+record+not+found+yet", status_code=302)
+
+    if MX_TARGET_HOST and MX_TARGET_HOST not in mx_hosts:
+        return RedirectResponse(
+            url=f"/dashboard?error=MX+must+include+{MX_TARGET_HOST}",
+            status_code=302,
+        )
+
+    domain.is_verified = True
+    domain.verified_at = datetime.utcnow()
+    db.commit()
+    if MX_TARGET_HOST:
+        info_msg = "Domain+verified+(TXT+and+MX).+You+can+now+create+masks"
+    else:
+        info_msg = "Domain+verified+(TXT+and+MX+exists).+You+can+now+create+masks"
+    return RedirectResponse(url=f"/dashboard?info={info_msg}", status_code=302)

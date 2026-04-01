@@ -1,0 +1,6 @@
+__pycache__/
+.pycache/
+*.pyc
+app/data/app.db
+app/data/messages/*.eml
+.env
