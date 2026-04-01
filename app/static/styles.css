@@ -192,6 +192,27 @@ button.danger:hover {
   border: 1px solid var(--line);
   background: #fff;
   box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
+  animation: toastFade 4.8s ease forwards;
+}
+
+@keyframes toastFade {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  8% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  78% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+    visibility: hidden;
+  }
 }
 
 .inbox-layout {
