@@ -241,15 +241,19 @@ button.danger:hover {
 }
 
 .folders-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  column-gap: 8px;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px;
   margin-bottom: 8px;
 }
 
+.folders-head h3 {
+  margin: 0;
+}
+
 .folders-head .icon-action-btn {
-  justify-self: end;
+  margin-left: auto;
+  display: inline-grid !important;
 }
 
 .folder-chip {
@@ -431,35 +435,38 @@ button.danger:hover {
   margin-bottom: 14px;
 }
 
-.compact-form {
-  display: flex;
-  flex-wrap: nowrap;
+.settings-panel .compact-form {
+  display: flex !important;
+  flex-wrap: nowrap !important;
   gap: 8px;
-  align-items: center;
+  align-items: center !important;
 }
 
-.compact-form-3 {
-  display: flex;
-  flex-wrap: nowrap;
+.settings-panel .compact-form-3 {
+  display: flex !important;
+  flex-wrap: nowrap !important;
 }
 
-.compact-form input,
-.compact-form select {
-  flex: 1 1 auto;
-  min-width: 0;
+.settings-panel .compact-form input,
+.settings-panel .compact-form select {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  width: auto !important;
   margin: 0;
 }
 
-.compact-form-3 select {
-  flex: 0 0 180px;
+.settings-panel .compact-form-3 select {
+  flex: 0 0 180px !important;
 }
 
-.compact-form .icon-action-btn {
+.settings-panel .compact-form .icon-action-btn {
   width: 32px !important;
   min-width: 32px !important;
   max-width: 32px !important;
   height: 32px !important;
   flex: 0 0 32px !important;
+  align-self: center !important;
+  margin: 0 !important;
 }
 
 .subtle {
