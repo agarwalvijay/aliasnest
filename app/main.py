@@ -485,10 +485,6 @@ def dashboard(
             )
         if not active_message:
             active_message = messages[0]
-        if active_message and (not active_message.is_outbound) and (not active_message.is_read):
-            active_message.is_read = True
-            db.commit()
-            active_message = db.get(Message, active_message.id)
     can_reply_all_active_message = False
     if active_mask and active_message and (not active_message.is_outbound) and _can_send_from_domain(active_mask.domain):
         target_email, _, _, _, to_cc_addresses = _reply_metadata(active_message)

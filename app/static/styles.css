@@ -266,6 +266,7 @@ button.danger:hover {
   padding: 9px 10px;
   border-bottom: 1px solid #e5eaf3;
   color: var(--ink);
+  font-weight: 400;
 }
 
 .mail-row:hover {
@@ -278,7 +279,7 @@ button.danger:hover {
 }
 
 .mail-row.unread {
-  background: #f4f9ff;
+  background: #edf4ff;
   border-left: 3px solid var(--accent);
   padding-left: 7px;
 }
@@ -286,6 +287,17 @@ button.danger:hover {
 .mail-row.unread .mail-from,
 .mail-row.unread .mail-subject {
   font-weight: 700;
+}
+
+.unread-dot {
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent);
 }
 
 .mail-row-main {
@@ -317,6 +329,11 @@ button.danger:hover {
 .mail-preview,
 .mail-time {
   color: var(--muted);
+}
+
+.mail-row:not(.unread) .mail-preview,
+.mail-row:not(.unread) .mail-time {
+  opacity: 0.9;
 }
 
 .mail-meta {

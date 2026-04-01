@@ -139,6 +139,9 @@
         {% if messages %}
           {% for msg in messages %}
             <a class="mail-row {% if active_message and active_message.id == msg.id %}active{% endif %} {% if (not msg.is_outbound) and (not msg.is_read) %}unread{% endif %}" href="/dashboard?selected_mask={{ active_mask.id }}&selected_message={{ msg.id }}">
+              {% if (not msg.is_outbound) and (not msg.is_read) %}
+                <span class="unread-dot" aria-hidden="true"></span>
+              {% endif %}
               <div class="mail-row-main">
                 <span class="mail-from">
                   {% if msg.is_outbound %}
