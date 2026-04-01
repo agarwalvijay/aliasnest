@@ -2,7 +2,7 @@ from datetime import datetime
 from email import policy
 from email.message import EmailMessage
 from email.parser import BytesParser
-from email.utils import parseaddr
+from email.utils import getaddresses, parseaddr
 import logging
 from pathlib import Path
 import re
@@ -116,11 +116,12 @@ def _can_send_from_domain(domain: str) -> bool:
     return domain.strip().lower().rstrip(".") in OUTBOUND_ALLOWED_DOMAINS
 
 
-def _reply_metadata(message: Message) -> tuple[str, str, str, str]:
+def _reply_metadata(message: Message) -> tuple[str, str, str, str, list[str]]:
     reply_to = ""
     message_id = ""
     references = ""
     subject = message.subject or "(No Subject)"
+    to_cc_addresses: list[str] = []
     try:
         raw_path = Path(message.raw_path)
         if raw_path.exists():
@@ -129,6 +130,7 @@ def _reply_metadata(message: Message) -> tuple[str, str, str, str]:
             message_id = parsed.get("Message-ID", "") or ""
             references = parsed.get("References", "") or ""
             subject = parsed.get("Subject", "") or subject
+            to_cc_addresses = [addr.strip().lower() for _, addr in getaddresses([parsed.get("To", ""), parsed.get("Cc", "")]) if addr]
     except Exception:
         reply_to = ""
 
@@ -137,7 +139,7 @@ def _reply_metadata(message: Message) -> tuple[str, str, str, str]:
     _, reply_address = parseaddr(reply_to)
     if not reply_address:
         _, reply_address = parseaddr(message.from_addr)
-    return reply_address, message_id.strip(), references.strip(), subject
+    return reply_address.strip().lower(), message_id.strip(), references.strip(), subject, to_cc_addresses
 
 
 def _extract_message_body(message: Message) -> str:
@@ -161,7 +163,7 @@ def _extract_message_body(message: Message) -> str:
     return message.text_preview or ""
 
 
-def _send_reply_email(mask: Mask, target_email: str, reply_body: str, in_reply_to: str, references: str, original_subject: str):
+def _send_reply_email(mask: Mask, target_emails: list[str], reply_body: str, in_reply_to: str, references: str, original_subject: str):
     subject = original_subject.strip() if original_subject else "(No Subject)"
     if not subject.lower().startswith("re:"):
         subject = f"Re: {subject}"
@@ -169,7 +171,7 @@ def _send_reply_email(mask: Mask, target_email: str, reply_body: str, in_reply_t
     sender = f"{mask.local_part}@{mask.domain}"
     msg = EmailMessage()
     msg["From"] = f"{OUTBOUND_FROM_NAME} <{sender}>"
-    msg["To"] = target_email
+    msg["To"] = ", ".join(target_emails)
     msg["Subject"] = subject
     if in_reply_to:
         msg["In-Reply-To"] = in_reply_to
@@ -613,6 +615,7 @@ def mark_message_unread(
 def reply_message(
     message_id: int,
     reply_body: str = Form(...),
+    reply_all: str = Form("false"),
     selected_mask: Optional[int] = Form(None),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
@@ -637,18 +640,30 @@ def reply_message(
     if not cleaned_reply:
         return RedirectResponse(url=f"/dashboard?selected_mask={mask.id}&error=Reply+message+cannot+be+empty", status_code=302)
 
-    target_email, in_reply_to, references, original_subject = _reply_metadata(message)
+    target_email, in_reply_to, references, original_subject, to_cc_addresses = _reply_metadata(message)
     if not target_email:
         return RedirectResponse(url=f"/dashboard?selected_mask={mask.id}&error=Could+not+resolve+reply+recipient", status_code=302)
+    mask_sender = f"{mask.local_part}@{mask.domain}".strip().lower()
+    should_reply_all = reply_all.strip().lower() in {"1", "true", "yes", "on"}
+    if should_reply_all:
+        recipients = {target_email}
+        recipients.update(to_cc_addresses)
+        recipients.discard(mask_sender)
+        recipients.discard("")
+        target_emails = sorted(recipients)
+    else:
+        target_emails = [target_email]
+    if not target_emails:
+        return RedirectResponse(url=f"/dashboard?selected_mask={mask.id}&error=No+valid+reply+recipient+found", status_code=302)
 
     try:
-        sent_msg, sender, sent_subject = _send_reply_email(mask, target_email, cleaned_reply, in_reply_to, references, original_subject)
+        sent_msg, sender, sent_subject = _send_reply_email(mask, target_emails, cleaned_reply, in_reply_to, references, original_subject)
     except Exception as exc:
         logger.exception(
             "Failed outbound reply send. mask_id=%s mask_domain=%s recipient=%s",
             mask.id,
             mask.domain,
-            target_email,
+            ",".join(target_emails),
         )
         error_text = str(exc).lower()
         if "authentication" in error_text or "auth" in error_text:
@@ -669,7 +684,7 @@ def reply_message(
         Message(
             mask_id=mask.id,
             from_addr=sender[:500],
-            to_addr=target_email[:500],
+            to_addr=", ".join(target_emails)[:500],
             subject=sent_subject[:500],
             text_preview=cleaned_reply[:2000],
             is_outbound=True,

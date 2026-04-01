@@ -536,16 +536,45 @@ button.danger:hover {
   gap: 8px;
 }
 
-.action-link {
+.icon-action {
   list-style: none;
   cursor: pointer;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
   color: var(--accent);
-  font-weight: 600;
+  font-size: 16px;
+  background: #fff;
+  user-select: none;
+}
+
+.icon-action::-webkit-details-marker {
+  display: none;
+}
+
+.icon-action-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  padding: 0;
   font-size: 14px;
 }
 
-.action-link::-webkit-details-marker {
-  display: none;
+.icon-action-btn:hover {
+  background: #f5f9ff;
+}
+
+.danger-icon {
+  color: var(--danger);
+  border-color: #f0c5cf;
 }
 
 .reply-menu {

@@ -177,13 +177,25 @@
           <div class="message-actions">
             {% if can_reply_active_mask and not active_message.is_outbound %}
               <details class="reply-menu">
-                <summary class="action-link">Reply</summary>
+                <summary class="icon-action" title="Reply" aria-label="Reply">↩</summary>
                 <form method="post" action="/messages/{{ active_message.id }}/reply" class="stack reply-form">
                   {% if active_mask %}<input type="hidden" name="selected_mask" value="{{ active_mask.id }}" />{% endif %}
+                  <input type="hidden" name="reply_all" value="false" />
                   <label>Reply message
                     <textarea name="reply_body" rows="5" required placeholder="Write your reply..."></textarea>
                   </label>
                   <button type="submit">Send reply</button>
+                </form>
+              </details>
+              <details class="reply-menu">
+                <summary class="icon-action" title="Reply all" aria-label="Reply all">↪</summary>
+                <form method="post" action="/messages/{{ active_message.id }}/reply" class="stack reply-form">
+                  {% if active_mask %}<input type="hidden" name="selected_mask" value="{{ active_mask.id }}" />{% endif %}
+                  <input type="hidden" name="reply_all" value="true" />
+                  <label>Reply all message
+                    <textarea name="reply_body" rows="5" required placeholder="Write your reply to all recipients..."></textarea>
+                  </label>
+                  <button type="submit">Send reply all</button>
                 </form>
               </details>
             {% elif active_message.is_outbound %}
@@ -196,19 +208,19 @@
               {% if active_message.is_read %}
                 <form method="post" action="/messages/{{ active_message.id }}/mark-unread" class="inline-form">
                   {% if active_mask %}<input type="hidden" name="selected_mask" value="{{ active_mask.id }}" />{% endif %}
-                  <button type="submit" class="ghost">Mark unread</button>
+                  <button type="submit" class="icon-action-btn" title="Mark unread" aria-label="Mark unread">●</button>
                 </form>
               {% else %}
                 <form method="post" action="/messages/{{ active_message.id }}/mark-read" class="inline-form">
                   {% if active_mask %}<input type="hidden" name="selected_mask" value="{{ active_mask.id }}" />{% endif %}
-                  <button type="submit" class="ghost">Mark read</button>
+                  <button type="submit" class="icon-action-btn" title="Mark read" aria-label="Mark read">○</button>
                 </form>
               {% endif %}
             {% endif %}
 
             <form method="post" action="/messages/{{ active_message.id }}/delete" class="inline-form">
               {% if active_mask %}<input type="hidden" name="selected_mask" value="{{ active_mask.id }}" />{% endif %}
-              <button type="submit" class="danger">Delete email</button>
+              <button type="submit" class="icon-action-btn danger-icon" title="Delete email" aria-label="Delete email">✕</button>
             </form>
           </div>
         </div>
