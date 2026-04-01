@@ -1,7 +1,12 @@
 from datetime import datetime
+from email import policy
+from email.message import EmailMessage
+from email.parser import BytesParser
+from email.utils import parseaddr
 from pathlib import Path
 import re
 import secrets
+import smtplib
 from typing import Optional
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
@@ -18,6 +23,13 @@ from .config import (
     ALLOWED_SIGNUP_EMAILS,
     DEFAULT_DOMAIN,
     MX_TARGET_HOST,
+    OUTBOUND_ALLOWED_DOMAINS,
+    OUTBOUND_FROM_NAME,
+    OUTBOUND_SMTP_HOST,
+    OUTBOUND_SMTP_PASS,
+    OUTBOUND_SMTP_PORT,
+    OUTBOUND_SMTP_STARTTLS,
+    OUTBOUND_SMTP_USER,
     PUBLIC_SMTP_PORT,
     SECRET_KEY,
     SIGNUP_INVITE_CODE,
@@ -90,6 +102,65 @@ def _extract_mx_hosts(mx_answers) -> set[str]:
         if value:
             hosts.add(value)
     return hosts
+
+
+def _can_send_from_domain(domain: str) -> bool:
+    if not OUTBOUND_SMTP_HOST or not OUTBOUND_SMTP_USER or not OUTBOUND_SMTP_PASS:
+        return False
+    if "*" in OUTBOUND_ALLOWED_DOMAINS:
+        return True
+    return domain.strip().lower().rstrip(".") in OUTBOUND_ALLOWED_DOMAINS
+
+
+def _reply_metadata(message: Message) -> tuple[str, str, str, str]:
+    reply_to = ""
+    message_id = ""
+    references = ""
+    subject = message.subject or "(No Subject)"
+    try:
+        raw_path = Path(message.raw_path)
+        if raw_path.exists():
+            parsed = BytesParser(policy=policy.default).parsebytes(raw_path.read_bytes())
+            reply_to = parsed.get("Reply-To", "") or parsed.get("From", "")
+            message_id = parsed.get("Message-ID", "") or ""
+            references = parsed.get("References", "") or ""
+            subject = parsed.get("Subject", "") or subject
+    except Exception:
+        reply_to = ""
+
+    if not reply_to:
+        reply_to = message.from_addr
+    _, reply_address = parseaddr(reply_to)
+    if not reply_address:
+        _, reply_address = parseaddr(message.from_addr)
+    return reply_address, message_id.strip(), references.strip(), subject
+
+
+def _send_reply_email(mask: Mask, target_email: str, reply_body: str, in_reply_to: str, references: str, original_subject: str):
+    subject = original_subject.strip() if original_subject else "(No Subject)"
+    if not subject.lower().startswith("re:"):
+        subject = f"Re: {subject}"
+
+    sender = f"{mask.local_part}@{mask.domain}"
+    msg = EmailMessage()
+    msg["From"] = f"{OUTBOUND_FROM_NAME} <{sender}>"
+    msg["To"] = target_email
+    msg["Subject"] = subject
+    if in_reply_to:
+        msg["In-Reply-To"] = in_reply_to
+    if references and in_reply_to:
+        msg["References"] = f"{references} {in_reply_to}".strip()
+    elif in_reply_to:
+        msg["References"] = in_reply_to
+    elif references:
+        msg["References"] = references
+    msg.set_content(reply_body)
+
+    with smtplib.SMTP(OUTBOUND_SMTP_HOST, OUTBOUND_SMTP_PORT, timeout=20) as smtp:
+        if OUTBOUND_SMTP_STARTTLS:
+            smtp.starttls()
+        smtp.login(OUTBOUND_SMTP_USER, OUTBOUND_SMTP_PASS)
+        smtp.send_message(msg)
 
 
 def _ensure_default_domain():
@@ -334,6 +405,7 @@ def dashboard(
             "dns_available": DNS_AVAILABLE,
             "mx_target_host": MX_TARGET_HOST,
             "public_smtp_port": PUBLIC_SMTP_PORT,
+            "can_reply_active_mask": bool(active_mask and _can_send_from_domain(active_mask.domain)),
             "now": datetime.utcnow(),
         },
     )
@@ -406,6 +478,45 @@ def delete_message(
     db.commit()
     keep_mask = selected_mask if selected_mask else mask_id
     return RedirectResponse(url=f"/dashboard?selected_mask={keep_mask}&info=Message+deleted", status_code=302)
+
+
+@app.post("/messages/{message_id}/reply")
+def reply_message(
+    message_id: int,
+    reply_body: str = Form(...),
+    selected_mask: Optional[int] = Form(None),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    message = db.scalar(
+        select(Message)
+        .join(Mask, Message.mask_id == Mask.id)
+        .where(Message.id == message_id, Mask.user_id == user.id)
+    )
+    if not message:
+        return RedirectResponse(url="/dashboard?error=Message+not+found", status_code=302)
+
+    mask = db.get(Mask, message.mask_id)
+    if not mask:
+        return RedirectResponse(url="/dashboard?error=Mask+not+found", status_code=302)
+    if not _can_send_from_domain(mask.domain):
+        return RedirectResponse(url=f"/dashboard?selected_mask={mask.id}&error=Reply+not+enabled+for+{mask.domain}", status_code=302)
+
+    cleaned_reply = reply_body.strip()
+    if not cleaned_reply:
+        return RedirectResponse(url=f"/dashboard?selected_mask={mask.id}&error=Reply+message+cannot+be+empty", status_code=302)
+
+    target_email, in_reply_to, references, original_subject = _reply_metadata(message)
+    if not target_email:
+        return RedirectResponse(url=f"/dashboard?selected_mask={mask.id}&error=Could+not+resolve+reply+recipient", status_code=302)
+
+    try:
+        _send_reply_email(mask, target_email, cleaned_reply, in_reply_to, references, original_subject)
+    except Exception:
+        return RedirectResponse(url=f"/dashboard?selected_mask={mask.id}&error=Failed+to+send+reply+via+outbound+SMTP", status_code=302)
+
+    keep_mask = selected_mask if selected_mask else mask.id
+    return RedirectResponse(url=f"/dashboard?selected_mask={keep_mask}&info=Reply+sent", status_code=302)
 
 
 @app.post("/masks/{mask_id}/delete")

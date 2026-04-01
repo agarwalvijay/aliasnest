@@ -19,3 +19,14 @@ ALLOWED_SIGNUP_EMAILS = {
     for email in os.getenv("ALLOWED_SIGNUP_EMAILS", "").split(",")
     if email.strip()
 }
+OUTBOUND_SMTP_HOST = os.getenv("OUTBOUND_SMTP_HOST", "").strip()
+OUTBOUND_SMTP_PORT = int(os.getenv("OUTBOUND_SMTP_PORT", "587"))
+OUTBOUND_SMTP_USER = os.getenv("OUTBOUND_SMTP_USER", "").strip()
+OUTBOUND_SMTP_PASS = os.getenv("OUTBOUND_SMTP_PASS", "").strip()
+OUTBOUND_SMTP_STARTTLS = os.getenv("OUTBOUND_SMTP_STARTTLS", "true").strip().lower() in {"1", "true", "yes", "on"}
+OUTBOUND_FROM_NAME = os.getenv("OUTBOUND_FROM_NAME", "AliasNest").strip()
+OUTBOUND_ALLOWED_DOMAINS = {
+    domain.strip().lower().rstrip(".")
+    for domain in os.getenv("OUTBOUND_ALLOWED_DOMAINS", "").split(",")
+    if domain.strip()
+}

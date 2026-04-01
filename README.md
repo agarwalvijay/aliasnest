@@ -57,8 +57,12 @@ PY
 
 ## Notes
 
-- This is MVP scope only (steps 1-3). No forwarding pipelines or outbound send/reply yet.
+- This is MVP scope only (steps 1-3), with optional outbound reply support via SMTP relay.
 - Replace `SECRET_KEY` before production use.
+- Outbound reply via SMTP relay (SES or similar):
+  - `OUTBOUND_SMTP_HOST`, `OUTBOUND_SMTP_PORT`, `OUTBOUND_SMTP_USER`, `OUTBOUND_SMTP_PASS`
+  - `OUTBOUND_SMTP_STARTTLS=true` for SES on port 587
+  - `OUTBOUND_ALLOWED_DOMAINS` controls which mask domains can send replies (comma-separated, `*` for all)
 - Registration is restricted by default (`SIGNUP_OPEN=false`).
   - Set `SIGNUP_OPEN=true` to allow public signup.
   - Set `SIGNUP_INVITE_CODE=<code>` to require an invite.
