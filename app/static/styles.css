@@ -226,6 +226,10 @@ button.danger:hover {
   margin-bottom: 8px;
 }
 
+.folders-head .icon-action-btn {
+  margin-left: auto;
+}
+
 .folder-chip {
   background: #fff;
   border: 1px solid var(--line);
@@ -410,6 +414,7 @@ button.danger:hover {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
+  grid-auto-flow: column;
 }
 
 .compact-form-3 {
@@ -607,15 +612,20 @@ button.danger:hover {
 
 .icon-action-btn {
   width: 32px;
+  min-width: 32px;
+  max-width: 32px;
   height: 32px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: #fff;
   color: var(--muted);
-  display: grid;
+  display: inline-grid;
   place-items: center;
   padding: 0;
   font-size: 14px;
+  line-height: 1;
+  justify-self: end;
+  flex: 0 0 auto;
 }
 
 .icon-action-btn:hover {
