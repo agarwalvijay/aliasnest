@@ -19,8 +19,22 @@
         <label>Password
           <input type="password" name="password" minlength="8" required />
         </label>
+        {% if invite_required %}
+        <label>Invite code
+          <input type="text" name="invite_code" required />
+        </label>
+        {% endif %}
         <button type="submit">Create account</button>
       </form>
+      {% if not signup_open %}
+        {% if invite_required %}
+          <p class="subtle">Signups are restricted. A valid invite code is required.</p>
+        {% elif allowlist_enabled %}
+          <p class="subtle">Signups are restricted to approved email addresses.</p>
+        {% else %}
+          <p class="subtle">New registrations are currently disabled.</p>
+        {% endif %}
+      {% endif %}
       <p class="subtle">Already registered? <a href="/login">Sign in</a></p>
     </section>
   </main>

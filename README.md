@@ -59,6 +59,10 @@ PY
 
 - This is MVP scope only (steps 1-3). No forwarding pipelines or outbound send/reply yet.
 - Replace `SECRET_KEY` before production use.
+- Registration is restricted by default (`SIGNUP_OPEN=false`).
+  - Set `SIGNUP_OPEN=true` to allow public signup.
+  - Set `SIGNUP_INVITE_CODE=<code>` to require an invite.
+  - Set `ALLOWED_SIGNUP_EMAILS=user1@example.com,user2@example.com` for allowlist signup.
 - For internet delivery, configure DNS and route MX to your home public IP/NAT.
 - Custom-domain verification checks:
   - TXT at `_relay-verify.<domain>` with dashboard token

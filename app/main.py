@@ -13,7 +13,17 @@ from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
 from .auth import hash_password, verify_password
-from .config import DEFAULT_DOMAIN, MX_TARGET_HOST, PUBLIC_SMTP_PORT, SECRET_KEY, SMTP_HOST, SMTP_PORT
+from .config import (
+    ALLOWED_SIGNUP_EMAILS,
+    DEFAULT_DOMAIN,
+    MX_TARGET_HOST,
+    PUBLIC_SMTP_PORT,
+    SECRET_KEY,
+    SIGNUP_INVITE_CODE,
+    SIGNUP_OPEN,
+    SMTP_HOST,
+    SMTP_PORT,
+)
 from .database import Base, SessionLocal, engine, get_db
 from .models import Domain, Mask, Message, User
 from .smtp_receiver import SMTPServerRuntime
@@ -142,6 +152,25 @@ def require_user(user: Optional[User] = Depends(current_user)) -> User:
     return user
 
 
+def _can_register(email: str, invite_code: str) -> Optional[str]:
+    if SIGNUP_OPEN:
+        return None
+
+    normalized_email = email.strip().lower()
+    if ALLOWED_SIGNUP_EMAILS and normalized_email in ALLOWED_SIGNUP_EMAILS:
+        return None
+
+    if SIGNUP_INVITE_CODE:
+        if invite_code.strip() == SIGNUP_INVITE_CODE:
+            return None
+        return "Registration requires a valid invite code."
+
+    if ALLOWED_SIGNUP_EMAILS:
+        return "Registration is restricted. Your email is not approved."
+
+    return "Registration is currently closed."
+
+
 @app.get("/")
 def root(request: Request, user: Optional[User] = Depends(current_user)):
     if user:
@@ -151,7 +180,16 @@ def root(request: Request, user: Optional[User] = Depends(current_user)):
 
 @app.get("/register")
 def register_page(request: Request):
-    return templates.TemplateResponse("register.html", {"request": request, "error": None})
+    return templates.TemplateResponse(
+        "register.html",
+        {
+            "request": request,
+            "error": None,
+            "signup_open": SIGNUP_OPEN,
+            "invite_required": bool(SIGNUP_INVITE_CODE),
+            "allowlist_enabled": bool(ALLOWED_SIGNUP_EMAILS),
+        },
+    )
 
 
 @app.post("/register")
@@ -159,15 +197,50 @@ def register_action(
     request: Request,
     email: str = Form(...),
     password: str = Form(...),
+    invite_code: str = Form(""),
     db: Session = Depends(get_db),
 ):
     email = email.strip().lower()
+    registration_error = _can_register(email, invite_code)
+    if registration_error:
+        return templates.TemplateResponse(
+            "register.html",
+            {
+                "request": request,
+                "error": registration_error,
+                "signup_open": SIGNUP_OPEN,
+                "invite_required": bool(SIGNUP_INVITE_CODE),
+                "allowlist_enabled": bool(ALLOWED_SIGNUP_EMAILS),
+            },
+            status_code=403,
+        )
+
     if len(password) < 8:
-        return templates.TemplateResponse("register.html", {"request": request, "error": "Password must be at least 8 characters."}, status_code=400)
+        return templates.TemplateResponse(
+            "register.html",
+            {
+                "request": request,
+                "error": "Password must be at least 8 characters.",
+                "signup_open": SIGNUP_OPEN,
+                "invite_required": bool(SIGNUP_INVITE_CODE),
+                "allowlist_enabled": bool(ALLOWED_SIGNUP_EMAILS),
+            },
+            status_code=400,
+        )
 
     existing = db.scalar(select(User).where(User.email == email))
     if existing:
-        return templates.TemplateResponse("register.html", {"request": request, "error": "Email already registered."}, status_code=400)
+        return templates.TemplateResponse(
+            "register.html",
+            {
+                "request": request,
+                "error": "Email already registered.",
+                "signup_open": SIGNUP_OPEN,
+                "invite_required": bool(SIGNUP_INVITE_CODE),
+                "allowlist_enabled": bool(ALLOWED_SIGNUP_EMAILS),
+            },
+            status_code=400,
+        )
 
     user = User(email=email, password_hash=hash_password(password))
     db.add(user)
