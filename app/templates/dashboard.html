@@ -192,22 +192,26 @@
                   <button type="submit">Send reply</button>
                 </form>
               </details>
-              <details class="reply-menu">
-                <summary class="icon-action" title="Reply all" aria-label="Reply all">
-                  <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M12 7L6 12L12 17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M8.5 7L2.5 12L8.5 17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </summary>
-                <form method="post" action="/messages/{{ active_message.id }}/reply" class="stack reply-form">
-                  {% if active_mask %}<input type="hidden" name="selected_mask" value="{{ active_mask.id }}" />{% endif %}
-                  <input type="hidden" name="reply_all" value="true" />
-                  <label>Reply all message
-                    <textarea name="reply_body" rows="5" required placeholder="Write your reply to all recipients..."></textarea>
-                  </label>
-                  <button type="submit">Send reply all</button>
-                </form>
-              </details>
+              {% if can_reply_all_active_message %}
+                <details class="reply-menu">
+                  <summary class="icon-action" title="Reply all" aria-label="Reply all">
+                    <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M11 7L5 12L11 17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M6 12H12.5C15.8 12 17.8 13.3 19.3 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                      <path d="M8 4.8L2 9.8L8 14.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M3 9.8H9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                    </svg>
+                  </summary>
+                  <form method="post" action="/messages/{{ active_message.id }}/reply" class="stack reply-form">
+                    {% if active_mask %}<input type="hidden" name="selected_mask" value="{{ active_mask.id }}" />{% endif %}
+                    <input type="hidden" name="reply_all" value="true" />
+                    <label>Reply all message
+                      <textarea name="reply_body" rows="5" required placeholder="Write your reply to all recipients..."></textarea>
+                    </label>
+                    <button type="submit">Send reply all</button>
+                  </form>
+                </details>
+              {% endif %}
             {% elif active_message.is_outbound %}
               <span class="subtle">Sent message</span>
             {% else %}

@@ -142,6 +142,20 @@ def _reply_metadata(message: Message) -> tuple[str, str, str, str, list[str]]:
     return reply_address.strip().lower(), message_id.strip(), references.strip(), subject, to_cc_addresses
 
 
+def _compute_reply_targets(mask: Mask, target_email: str, to_cc_addresses: list[str], reply_all: bool) -> list[str]:
+    if not target_email:
+        return []
+    if not reply_all:
+        return [target_email]
+
+    mask_sender = f"{mask.local_part}@{mask.domain}".strip().lower()
+    recipients = {target_email}
+    recipients.update(to_cc_addresses)
+    recipients.discard(mask_sender)
+    recipients.discard("")
+    return sorted(recipients)
+
+
 def _extract_message_body(message: Message) -> str:
     try:
         raw_path = Path(message.raw_path)
@@ -475,6 +489,11 @@ def dashboard(
             active_message.is_read = True
             db.commit()
             active_message = db.get(Message, active_message.id)
+    can_reply_all_active_message = False
+    if active_mask and active_message and (not active_message.is_outbound) and _can_send_from_domain(active_mask.domain):
+        target_email, _, _, _, to_cc_addresses = _reply_metadata(active_message)
+        reply_all_targets = _compute_reply_targets(active_mask, target_email, to_cc_addresses, True)
+        can_reply_all_active_message = len(reply_all_targets) > 1
 
     return templates.TemplateResponse(
         "dashboard.html",
@@ -494,6 +513,7 @@ def dashboard(
             "mx_target_host": MX_TARGET_HOST,
             "public_smtp_port": PUBLIC_SMTP_PORT,
             "can_reply_active_mask": bool(active_mask and _can_send_from_domain(active_mask.domain)),
+            "can_reply_all_active_message": can_reply_all_active_message,
             "active_message": active_message,
             "active_message_body": _extract_message_body(active_message) if active_message else "",
             "now": datetime.utcnow(),
@@ -643,16 +663,8 @@ def reply_message(
     target_email, in_reply_to, references, original_subject, to_cc_addresses = _reply_metadata(message)
     if not target_email:
         return RedirectResponse(url=f"/dashboard?selected_mask={mask.id}&error=Could+not+resolve+reply+recipient", status_code=302)
-    mask_sender = f"{mask.local_part}@{mask.domain}".strip().lower()
     should_reply_all = reply_all.strip().lower() in {"1", "true", "yes", "on"}
-    if should_reply_all:
-        recipients = {target_email}
-        recipients.update(to_cc_addresses)
-        recipients.discard(mask_sender)
-        recipients.discard("")
-        target_emails = sorted(recipients)
-    else:
-        target_emails = [target_email]
+    target_emails = _compute_reply_targets(mask, target_email, to_cc_addresses, should_reply_all)
     if not target_emails:
         return RedirectResponse(url=f"/dashboard?selected_mask={mask.id}&error=No+valid+reply+recipient+found", status_code=302)
 
