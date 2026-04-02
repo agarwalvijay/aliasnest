@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "expo": "^54.0.33",
-    "expo-clipboard": "~7.0.1",
+    "expo-clipboard": "~8.0.8",
     "expo-secure-store": "~15.0.8",
     "react": "19.1.0",
     "react-native": "0.81.5"
