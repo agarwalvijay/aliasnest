@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   BackHandler,
   FlatList,
+  KeyboardAvoidingView,
   PanResponder,
   Platform,
   SafeAreaView,
@@ -123,6 +124,7 @@ function shortTime(isoUtc: string): string {
 
 export default function App() {
   const topInset = Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
+  const passwordRef = useRef<TextInput>(null);
   const [booting, setBooting] = useState(true);
   const [busy, setBusy] = useState(false);
   const [token, setToken] = useState<string | null>(null);
@@ -235,7 +237,7 @@ export default function App() {
     try {
       const me = await apiRequest<User>("/api/me", "GET", activeToken);
       setUser(me);
-      setTimezoneInput(me.timezone || "UTC");
+      if (!timezoneDropdownOpen) setTimezoneInput(me.timezone || "UTC");
 
       const domainPayload = await apiRequest<{ items: Domain[] }>("/api/domains", "GET", activeToken);
       setDomains(domainPayload.items);
@@ -343,6 +345,7 @@ export default function App() {
       setViewMode("message");
       setShowReplyComposer(false);
       setReplyDraft("");
+      setReplyAllMode(false);
 
       if (!detail.is_outbound && !detail.is_read) {
         await apiRequest(`/api/messages/${messageId}/mark-read`, "POST", token);
@@ -359,22 +362,31 @@ export default function App() {
     }
   }
 
-  async function deleteMessage() {
+  function deleteMessage() {
     if (!token || !selectedMessage) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await apiRequest(`/api/messages/${selectedMessage.id}`, "DELETE", token);
-      setSelectedMessage(null);
-      setShowReplyComposer(false);
-      setReplyDraft("");
-      setViewMode("inbox");
-      await loadInboxMessages(token, selectedMaskId, masks);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed");
-    } finally {
-      setBusy(false);
-    }
+    Alert.alert("Delete message?", "This cannot be undone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          setBusy(true);
+          setError(null);
+          try {
+            await apiRequest(`/api/messages/${selectedMessage.id}`, "DELETE", token);
+            setSelectedMessage(null);
+            setShowReplyComposer(false);
+            setReplyDraft("");
+            setViewMode("inbox");
+            await loadInboxMessages(token, selectedMaskId, masks);
+          } catch (e) {
+            setError(e instanceof Error ? e.message : "Delete failed");
+          } finally {
+            setBusy(false);
+          }
+        },
+      },
+    ]);
   }
 
   async function toggleReadState() {
@@ -486,18 +498,27 @@ export default function App() {
     }
   }
 
-  async function deleteDomain(domainId: number) {
+  function deleteDomain(domainId: number) {
     if (!token) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await apiRequest(`/api/domains/${domainId}`, "DELETE", token);
-      await refreshAccount(token, selectedMaskId);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to delete domain");
-    } finally {
-      setBusy(false);
-    }
+    Alert.alert("Delete domain?", "All associated masks and messages will be lost.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          setBusy(true);
+          setError(null);
+          try {
+            await apiRequest(`/api/domains/${domainId}`, "DELETE", token);
+            await refreshAccount(token, selectedMaskId);
+          } catch (e) {
+            setError(e instanceof Error ? e.message : "Failed to delete domain");
+          } finally {
+            setBusy(false);
+          }
+        },
+      },
+    ]);
   }
 
   async function createMask() {
@@ -527,19 +548,28 @@ export default function App() {
     }
   }
 
-  async function deleteMask(maskId: number) {
+  function deleteMask(maskId: number) {
     if (!token) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await apiRequest(`/api/masks/${maskId}`, "DELETE", token);
-      const nextSelection = selectedMaskId === maskId ? null : selectedMaskId;
-      await refreshAccount(token, nextSelection);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to delete mask");
-    } finally {
-      setBusy(false);
-    }
+    Alert.alert("Delete mask?", "All messages for this mask will be permanently deleted.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          setBusy(true);
+          setError(null);
+          try {
+            await apiRequest(`/api/masks/${maskId}`, "DELETE", token);
+            const nextSelection = selectedMaskId === maskId ? null : selectedMaskId;
+            await refreshAccount(token, nextSelection);
+          } catch (e) {
+            setError(e instanceof Error ? e.message : "Failed to delete mask");
+          } finally {
+            setBusy(false);
+          }
+        },
+      },
+    ]);
   }
 
   async function copyValue(label: string, value: string | null | undefined) {
@@ -564,8 +594,26 @@ export default function App() {
           <Text style={styles.brand}>AliasNest</Text>
           <Text style={styles.subtitle}>Sign in to your inbox</Text>
           {error ? <Text style={styles.error}>{error}</Text> : null}
-          <TextInput value={email} onChangeText={setEmail} autoCapitalize="none" placeholder="Email" style={styles.input} />
-          <TextInput value={password} onChangeText={setPassword} secureTextEntry placeholder="Password" style={styles.input} />
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            returnKeyType="next"
+            onSubmitEditing={() => passwordRef.current?.focus()}
+            placeholder="Email"
+            style={styles.input}
+          />
+          <TextInput
+            ref={passwordRef}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            placeholder="Password"
+            returnKeyType="done"
+            onSubmitEditing={() => void doLogin()}
+            style={styles.input}
+          />
           <TouchableOpacity style={styles.primaryBtn} onPress={doLogin} disabled={busy}>
             <Text style={styles.primaryBtnText}>{busy ? "Signing in..." : "Sign in"}</Text>
           </TouchableOpacity>
@@ -581,7 +629,7 @@ export default function App() {
           <>
             <View style={styles.headerLeft}>
               <TouchableOpacity style={styles.iconButton} onPress={() => setDrawerOpen(true)}>
-                <Text style={styles.iconButtonText}>☰</Text>
+                <MaterialCommunityIcons name="menu" size={22} color="#fff" />
               </TouchableOpacity>
               <View>
                 <Text style={styles.headerTitle}>Inbox</Text>
@@ -589,7 +637,7 @@ export default function App() {
               </View>
             </View>
             <TouchableOpacity style={styles.iconButton} onPress={() => void refreshAccount(token, selectedMaskId)}>
-              <Text style={styles.iconButtonText}>⟳</Text>
+              <MaterialCommunityIcons name="refresh" size={22} color="#fff" />
             </TouchableOpacity>
           </>
         ) : null}
@@ -598,7 +646,7 @@ export default function App() {
           <>
             <View style={styles.headerLeft}>
               <TouchableOpacity style={styles.iconButton} onPress={goBackToInbox}>
-                <Text style={styles.iconButtonText}>←</Text>
+                <MaterialCommunityIcons name="arrow-left" size={22} color="#fff" />
               </TouchableOpacity>
               <Text style={styles.headerTitle}>Message</Text>
             </View>
@@ -623,7 +671,7 @@ export default function App() {
           <>
             <View style={styles.headerLeft}>
               <TouchableOpacity style={styles.iconButton} onPress={() => setViewMode("inbox")}>
-                <Text style={styles.iconButtonText}>←</Text>
+                <MaterialCommunityIcons name="arrow-left" size={22} color="#fff" />
               </TouchableOpacity>
               <Text style={styles.headerTitle}>Settings</Text>
             </View>
@@ -638,6 +686,8 @@ export default function App() {
         <FlatList
           data={messages}
           keyExtractor={(item) => String(item.id)}
+          refreshing={busy}
+          onRefresh={() => void refreshAccount(token, selectedMaskId)}
           ListEmptyComponent={<Text style={styles.emptyText}>No messages yet.</Text>}
           renderItem={({ item }) => {
             const isUnread = !item.is_outbound && !item.is_read;
@@ -651,9 +701,10 @@ export default function App() {
                   <View style={styles.messageTopLine}>
                     <Text style={[styles.senderText, isUnread && styles.senderTextUnread]} numberOfLines={1}>{senderLabel(item)}</Text>
                     {isUnread ? <View style={styles.unreadDot} /> : null}
-                    <Text style={styles.timeText}>{shortTime(item.received_at_utc)}</Text>
+                    <Text style={styles.timeText}>{item.received_at_local}</Text>
                   </View>
                   <Text style={[styles.subjectText, isUnread && styles.subjectTextUnread]} numberOfLines={1}>{item.subject}</Text>
+                  {item.preview ? <Text style={styles.previewText} numberOfLines={1}>{item.preview}</Text> : null}
                   <Text style={styles.aliasText} numberOfLines={1}>{item.mask_address}</Text>
                 </View>
               </View>
@@ -664,6 +715,7 @@ export default function App() {
       ) : null}
 
       {viewMode === "message" ? (
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={styles.messageScreenWrap} {...messageSwipeResponder.panHandlers}>
           <ScrollView style={styles.detailScreen}>
             {selectedMessage ? (
@@ -740,9 +792,11 @@ export default function App() {
             )}
           </ScrollView>
         </View>
+        </KeyboardAvoidingView>
       ) : null}
 
       {viewMode === "settings" ? (
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView style={styles.settingsScreen}>
           <Text style={styles.settingsSectionTitle}>Account</Text>
           <Text style={styles.userText}>{user?.email}</Text>
@@ -916,6 +970,7 @@ export default function App() {
             <Text style={styles.logoutBtnText}>Sign out</Text>
           </TouchableOpacity>
         </ScrollView>
+        </KeyboardAvoidingView>
       ) : null}
 
       {drawerOpen ? (
@@ -1180,6 +1235,11 @@ const styles = StyleSheet.create({
   subjectTextUnread: {
     fontWeight: "600",
   },
+  previewText: {
+    color: "#8a9ab4",
+    fontSize: 12,
+    marginTop: 2,
+  },
   aliasText: {
     color: "#6d7a90",
     fontSize: 13,
@@ -1265,8 +1325,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   deleteIconBtn: {
-    width: 32,
-    height: 32,
+    width: 40,
+    height: 40,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#f0b8c2",
@@ -1275,8 +1335,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   copyIconBtn: {
-    width: 28,
-    height: 28,
+    width: 36,
+    height: 36,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#bfd3ef",
