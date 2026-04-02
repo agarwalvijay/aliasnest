@@ -172,6 +172,26 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 .top-icon:hover { background: #f0f4fa; color: #0a66c2; }
 .top-icon.active { background: #eef5ff; color: #0a66c2; }
 
+/* Settings gear — Gmail-style prominent button */
+.settings-btn {
+  border: 1.5px solid #d0daea;
+  background: #f4f7fb;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: #42526e;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.settings-btn svg { width: 20px; height: 20px; transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.settings-btn:hover { background: #eaeff7; border-color: #a8bcd4; color: #0a66c2; }
+.settings-btn:hover svg { transform: rotate(60deg); }
+.settings-btn.active { background: #eef5ff; border-color: #0a66c2; color: #0a66c2; }
+.settings-btn.active svg { transform: rotate(90deg); }
+
 /* ── Error bar ────────────────────────────────────────────────────────────── */
 .error-bar {
   background: #fff1f0;

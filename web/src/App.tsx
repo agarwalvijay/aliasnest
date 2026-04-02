@@ -364,7 +364,7 @@ export default function App() {
         </div>
         <div className="top-actions">
           <span className="user-pill">{user?.email}</span>
-          <button className={`top-icon${showSettings ? " active" : ""}`} title="Settings" onClick={() => setShowSettings((v) => !v)}>
+          <button className={`settings-btn${showSettings ? " active" : ""}`} title="Settings" onClick={() => setShowSettings((v) => !v)}>
             <IconSettings />
           </button>
           <button className="top-icon" title="Refresh" onClick={() => token && void hydrate(token, selectedMaskId)}>
