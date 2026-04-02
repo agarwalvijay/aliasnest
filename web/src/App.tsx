@@ -1,7 +1,28 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiRequest } from "./api";
 
-// ── SVG icons ──────────────────────────────────────────────────────────────
+// ── helpers ──────────────────────────────────────────────────────────────────
+function displayName(addr: string): string {
+  const m = addr.match(/^([^<]+?)\s*</);
+  return m ? m[1].trim() : addr.replace(/[<>]/g, "").trim();
+}
+function senderInitial(addr: string): string {
+  return displayName(addr).charAt(0).toUpperCase() || "?";
+}
+const AVATAR_PALETTE = ["#0a66c2","#0891b2","#059669","#7c3aed","#db2777","#ea580c","#0284c7","#65a30d"];
+function avatarColor(addr: string): string {
+  let h = 0;
+  for (const c of addr) h = c.charCodeAt(0) + ((h << 5) - h);
+  return AVATAR_PALETTE[Math.abs(h) % AVATAR_PALETTE.length];
+}
+
+// ── SVG icons ─────────────────────────────────────────────────────────────────
+const IconInbox = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
+    <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+  </svg>
+);
 const IconSettings = () => (
   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="3"/>
@@ -55,7 +76,7 @@ const IconMailUnread = () => (
   </svg>
 );
 const IconTrash = () => (
-  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
     <path d="M8 7H16M10 4H14M6.8 7L7.6 18.2C7.7 19.2 8.5 20 9.5 20H14.5C15.5 20 16.3 19.2 16.4 18.2L17.2 7"/>
     <path d="M10 10V16M14 10V16"/>
   </svg>
@@ -77,7 +98,7 @@ const IconCheck = () => (
     <polyline points="20 6 9 17 4 12"/>
   </svg>
 );
-// ── end icons ───────────────────────────────────────────────────────────────
+// ── end icons ─────────────────────────────────────────────────────────────────
 
 type User = { id: number; email: string; timezone: string };
 type Mask = { id: number; address: string; local_part: string; domain: string; unread_count: number };
@@ -112,22 +133,9 @@ type MessageDetail = Message & { body: string };
 
 const TOKEN_KEY = "aliasnest_web_token";
 const TIMEZONE_OPTIONS = [
-  "UTC",
-  "America/Chicago",
-  "America/New_York",
-  "America/Los_Angeles",
-  "America/Denver",
-  "America/Phoenix",
-  "America/Anchorage",
-  "Pacific/Honolulu",
-  "Europe/London",
-  "Europe/Berlin",
-  "Europe/Paris",
-  "Europe/Amsterdam",
-  "Asia/Kolkata",
-  "Asia/Singapore",
-  "Asia/Tokyo",
-  "Australia/Sydney",
+  "UTC","America/Chicago","America/New_York","America/Los_Angeles","America/Denver",
+  "America/Phoenix","America/Anchorage","Pacific/Honolulu","Europe/London","Europe/Berlin",
+  "Europe/Paris","Europe/Amsterdam","Asia/Kolkata","Asia/Singapore","Asia/Tokyo","Australia/Sydney",
 ];
 
 export default function App() {
@@ -152,15 +160,21 @@ export default function App() {
   const [replyBody, setReplyBody] = useState("");
   const [replyMode, setReplyMode] = useState<"reply" | "reply_all">("reply");
 
-  const verifiedDomainNames = useMemo(
-    () => domains.filter((d) => d.can_use_for_mask).map((d) => d.name),
-    [domains],
-  );
+  const totalUnread = useMemo(() => masks.reduce((s, m) => s + m.unread_count, 0), [masks]);
+  const verifiedDomainNames = useMemo(() => domains.filter((d) => d.can_use_for_mask).map((d) => d.name), [domains]);
+  const activeMask = useMemo(() => masks.find((m) => m.id === selectedMaskId) ?? null, [masks, selectedMaskId]);
 
   useEffect(() => {
     if (!token) return;
     void hydrate(token, selectedMaskId);
   }, [token]);
+
+  // Close settings on Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setShowSettings(false); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   async function hydrate(activeToken: string, preferredMask: number | null) {
     setBusy(true);
@@ -169,22 +183,19 @@ export default function App() {
       const me = await apiRequest<User>("/api/me", "GET", activeToken);
       setUser(me);
       setTimezone(me.timezone || "UTC");
-
       const maskPayload = await apiRequest<{ items: Mask[] }>("/api/masks", "GET", activeToken);
       setMasks(maskPayload.items);
-
       const domainPayload = await apiRequest<{ items: Domain[] }>("/api/domains", "GET", activeToken);
       setDomains(domainPayload.items);
       if (!newMaskDomain) {
         const first = domainPayload.items.find((d) => d.can_use_for_mask)?.name || "";
         setNewMaskDomain(first);
       }
-
       const targetMask = preferredMask && maskPayload.items.some((m) => m.id === preferredMask) ? preferredMask : null;
       setSelectedMaskId(targetMask);
       await loadMessages(activeToken, targetMask, maskPayload.items);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load app");
+      setError(e instanceof Error ? e.message : "Failed to load");
     } finally {
       setBusy(false);
     }
@@ -197,18 +208,13 @@ export default function App() {
       setMessages(payload.items.map((m) => ({ ...m, mask_address: mask?.address || "" })));
       return;
     }
-
     const results = await Promise.all(
       maskList.map(async (mask) => {
         const payload = await apiRequest<{ items: Message[] }>(`/api/masks/${mask.id}/messages?limit=60`, "GET", activeToken);
         return payload.items.map((m) => ({ ...m, mask_address: mask.address }));
       }),
     );
-    setMessages(
-      results
-        .flat()
-        .sort((a, b) => new Date(b.received_at_utc).getTime() - new Date(a.received_at_utc).getTime()),
-    );
+    setMessages(results.flat().sort((a, b) => new Date(b.received_at_utc).getTime() - new Date(a.received_at_utc).getTime()));
   }
 
   async function login() {
@@ -226,20 +232,10 @@ export default function App() {
   }
 
   async function logout() {
-    if (token) {
-      try {
-        await apiRequest("/api/auth/logout", "POST", token);
-      } catch {
-        // ignore
-      }
-    }
+    if (token) { try { await apiRequest("/api/auth/logout", "POST", token); } catch { /* ignore */ } }
     localStorage.removeItem(TOKEN_KEY);
-    setToken(null);
-    setUser(null);
-    setMessages([]);
-    setSelectedMessage(null);
-    setReplyBody("");
-    setReplyMode("reply");
+    setToken(null); setUser(null); setMessages([]); setSelectedMessage(null);
+    setReplyBody(""); setReplyMode("reply");
   }
 
   async function openMessage(messageId: number) {
@@ -274,21 +270,14 @@ export default function App() {
     if (!token || !selectedMessage || selectedMessage.is_outbound) return;
     const body = replyBody.trim();
     if (!body) return;
-    await apiRequest(`/api/messages/${selectedMessage.id}/reply`, "POST", token, {
-      body,
-      reply_all: replyMode === "reply_all",
-    });
+    await apiRequest(`/api/messages/${selectedMessage.id}/reply`, "POST", token, { body, reply_all: replyMode === "reply_all" });
     setReplyBody("");
     await hydrate(token, selectedMaskId);
   }
 
   async function copyToClipboard(value: string | null | undefined) {
     if (!value) return;
-    try {
-      await navigator.clipboard.writeText(value);
-    } catch {
-      // no-op
-    }
+    try { await navigator.clipboard.writeText(value); } catch { /* no-op */ }
   }
 
   async function updateTimezone() {
@@ -318,10 +307,7 @@ export default function App() {
 
   async function createMask() {
     if (!token || !newMaskLocal.trim() || !newMaskDomain) return;
-    await apiRequest("/api/masks", "POST", token, {
-      local_part: newMaskLocal.trim().toLowerCase(),
-      domain_name: newMaskDomain,
-    });
+    await apiRequest("/api/masks", "POST", token, { local_part: newMaskLocal.trim().toLowerCase(), domain_name: newMaskDomain });
     setNewMaskLocal("");
     await hydrate(token, selectedMaskId);
   }
@@ -332,25 +318,49 @@ export default function App() {
     await hydrate(token, selectedMaskId === maskId ? null : selectedMaskId);
   }
 
+  // ── Login ──────────────────────────────────────────────────────────────────
   if (!token) {
     return (
-      <div className="shell login-shell">
-        <div className="card login-card">
-          <h1>AliasNest</h1>
-          {error && <p className="error">{error}</p>}
-          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
-          <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" type="password" onKeyDown={(e) => e.key === "Enter" && void login()} />
-          <button onClick={() => void login()} disabled={busy}>{busy ? "Signing in..." : "Sign in"}</button>
+      <div className="login-shell">
+        <div className="login-card">
+          <div className="login-brand">
+            <div className="login-logo"><IconInbox /></div>
+            <h1>AliasNest</h1>
+            <p>Private email masking</p>
+          </div>
+          <div className="login-body">
+            {error && <p className="login-error">{error}</p>}
+            <input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Email address"
+              type="email"
+              autoFocus
+            />
+            <input
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              type="password"
+              onKeyDown={(e) => e.key === "Enter" && void login()}
+            />
+            <button onClick={() => void login()} disabled={busy}>
+              {busy ? "Signing in…" : "Sign in"}
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
+  // ── App shell ─────────────────────────────────────────────────────────────
   return (
-    <div className="shell">
+    <div className="app-shell">
+      {/* Topbar */}
       <header className="topbar">
         <div className="brand-block">
-          <h2>AliasNest</h2>
+          <div className="brand-icon"><IconInbox /></div>
+          <span className="brand-name">AliasNest</span>
         </div>
         <div className="top-actions">
           <span className="user-pill">{user?.email}</span>
@@ -366,18 +376,16 @@ export default function App() {
         </div>
       </header>
 
-      {error && <p className="error page-error">{error}</p>}
+      {error && <div className="error-bar">{error}</div>}
 
       {/* Settings modal */}
       {showSettings && (
         <>
           <div className="settings-backdrop" onClick={() => setShowSettings(false)} />
-          <div className="settings-modal card">
+          <div className="settings-modal">
             <div className="settings-modal-head">
               <h2>Settings</h2>
-              <button className="icon-btn" onClick={() => setShowSettings(false)} title="Close">
-                <IconClose />
-              </button>
+              <button className="icon-btn" onClick={() => setShowSettings(false)} title="Close"><IconClose /></button>
             </div>
 
             <div className="settings-grid">
@@ -394,7 +402,7 @@ export default function App() {
               <div className="settings-block">
                 <h3>Custom Domains</h3>
                 <div className="row-inline">
-                  <input value={newDomain} onChange={(e) => setNewDomain(e.target.value)} placeholder="example.com" />
+                  <input value={newDomain} onChange={(e) => setNewDomain(e.target.value)} placeholder="example.com" onKeyDown={(e) => e.key === "Enter" && void addDomain()} />
                   <button className="icon-btn" title="Add domain" onClick={() => void addDomain()}><IconPlus /></button>
                 </div>
                 <div className="stack">
@@ -403,11 +411,13 @@ export default function App() {
                       <div className="sub-card-head">
                         <strong>{d.name}</strong>
                         <div className="row-inline">
-                          {!d.is_verified && <button onClick={() => void verifyDomain(d.id)}>Verify</button>}
+                          {!d.is_verified && <button className="verify-btn" onClick={() => void verifyDomain(d.id)}>Verify</button>}
                           <button className="icon-btn danger-icon" onClick={() => void deleteDomain(d.id)} title="Delete domain"><IconTrash /></button>
                         </div>
                       </div>
-                      <p>{d.is_verified ? "Verified" : "Pending verification"}</p>
+                      <span className={`domain-status ${d.is_verified ? "ok" : "pending"}`}>
+                        {d.is_verified ? "Verified" : "Pending verification"}
+                      </span>
                       {!d.is_verified && (
                         <div className="dns-grid">
                           <span>TXT host</span>
@@ -429,13 +439,16 @@ export default function App() {
                       )}
                     </article>
                   ))}
+                  {domains.filter((d) => !d.is_default).length === 0 && (
+                    <p className="subtle">No custom domains yet.</p>
+                  )}
                 </div>
               </div>
 
               <div className="settings-block">
                 <h3>Create Mask</h3>
                 <div className="row-inline">
-                  <input value={newMaskLocal} onChange={(e) => setNewMaskLocal(e.target.value)} placeholder="shopping-1" />
+                  <input value={newMaskLocal} onChange={(e) => setNewMaskLocal(e.target.value)} placeholder="shopping-1" onKeyDown={(e) => e.key === "Enter" && void createMask()} />
                   <select value={newMaskDomain} onChange={(e) => setNewMaskDomain(e.target.value)}>
                     {verifiedDomainNames.map((d) => <option key={d} value={d}>{d}</option>)}
                   </select>
@@ -447,21 +460,25 @@ export default function App() {
         </>
       )}
 
+      {/* Main layout */}
       <main className="layout">
-        <aside className="card sidebar">
+        {/* Sidebar */}
+        <aside className="sidebar">
           <button
-            className={!selectedMaskId ? "active" : ""}
-            onClick={() => {
-              setSelectedMessage(null);
-              token && void hydrate(token, null);
-            }}
+            className={`sidebar-all${!selectedMaskId ? " active" : ""}`}
+            onClick={() => { setSelectedMessage(null); token && void hydrate(token, null); }}
           >
-            All inbox
+            <IconInbox />
+            <span>All Inbox</span>
+            {totalUnread > 0 && <span className="sidebar-badge">{totalUnread}</span>}
           </button>
+
+          {masks.length > 0 && <div className="sidebar-label">MASKS</div>}
+
           {masks.map((mask) => (
-            <div className="mask-row" key={mask.id}>
+            <div className="mask-item" key={mask.id}>
               <button
-                className={selectedMaskId === mask.id ? "active" : ""}
+                className={`mask-btn${selectedMaskId === mask.id ? " active" : ""}`}
                 onClick={() => {
                   if (!token) return;
                   setSelectedMessage(null);
@@ -469,74 +486,110 @@ export default function App() {
                   void loadMessages(token, mask.id, masks);
                 }}
               >
-                {mask.address} {mask.unread_count > 0 ? <span className="unread-badge">{mask.unread_count}</span> : null}
+                <span className="mask-addr-text">{mask.address}</span>
+                {mask.unread_count > 0 && <span className="sidebar-badge">{mask.unread_count}</span>}
               </button>
-              <button className="icon-btn danger-icon" title="Delete mask" onClick={() => void deleteMask(mask.id)}><IconTrash /></button>
+              <button className="mask-del-btn" onClick={() => void deleteMask(mask.id)} title="Delete mask">
+                <IconTrash />
+              </button>
             </div>
           ))}
+
+          {masks.length === 0 && (
+            <p className="sidebar-empty">No masks yet. Create one in Settings.</p>
+          )}
         </aside>
 
-        <section className="card list">
-          {messages.length === 0 && <p className="subtle">No messages yet.</p>}
-          {messages.map((msg) => (
-            <button key={msg.id} className={`message-row${!msg.is_outbound && !msg.is_read ? " unread" : ""}`} onClick={() => void openMessage(msg.id)}>
-              <div className="line1">
-                <strong>{msg.is_outbound ? `To: ${msg.to}` : msg.from}</strong>
-                <span>{msg.received_at_local}</span>
+        {/* Message list */}
+        <section className="list-pane">
+          <div className="list-header">
+            <span className="list-title">{activeMask ? activeMask.address : "All Inbox"}</span>
+            {messages.length > 0 && <span className="list-count">{messages.length}</span>}
+          </div>
+          <div className="list-body">
+            {messages.length === 0 && (
+              <div className="empty-state">
+                <IconInbox />
+                <p>No messages</p>
               </div>
-              <div className="line2">{msg.subject}</div>
-              <div className="line3">{msg.mask_address}</div>
-            </button>
-          ))}
+            )}
+            {messages.map((msg) => {
+              const senderAddr = msg.is_outbound ? msg.to : msg.from;
+              return (
+                <button
+                  key={msg.id}
+                  className={`message-row${!msg.is_outbound && !msg.is_read ? " unread" : ""}${selectedMessage?.id === msg.id ? " selected" : ""}`}
+                  onClick={() => void openMessage(msg.id)}
+                >
+                  <div className="msg-avatar" style={{ background: avatarColor(senderAddr) }}>
+                    {senderInitial(senderAddr)}
+                  </div>
+                  <div className="msg-info">
+                    <div className="msg-row-top">
+                      <span className="msg-sender">
+                        {msg.is_outbound ? `→ ${displayName(msg.to)}` : displayName(msg.from)}
+                      </span>
+                      <span className="msg-time">{msg.received_at_local}</span>
+                    </div>
+                    <div className="msg-subject">{msg.subject}</div>
+                    {msg.preview && <div className="msg-preview">{msg.preview}</div>}
+                    {!selectedMaskId && msg.mask_address && (
+                      <div className="msg-mask-tag">{msg.mask_address}</div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </section>
 
-        <section className="card read">
+        {/* Read pane */}
+        <section className="read-pane">
           {selectedMessage ? (
             <>
-              <div className="read-head">
-                <div>
-                  <h3>{selectedMessage.subject}</h3>
-                  <p>From: {selectedMessage.from}</p>
-                  <p>To: {selectedMessage.to}</p>
-                </div>
-                <div className="msg-actions">
-                  {!selectedMessage.is_outbound && (
-                    <>
-                      <button
-                        className={`icon-btn${replyMode === "reply" ? " active" : ""}`}
-                        title="Reply"
-                        onClick={() => setReplyMode("reply")}
-                      >
-                        <IconReply />
-                      </button>
-                      <button
-                        className={`icon-btn${replyMode === "reply_all" ? " active" : ""}`}
-                        title="Reply all"
-                        onClick={() => setReplyMode("reply_all")}
-                      >
-                        <IconReplyAll />
-                      </button>
-                      <button
-                        className="icon-btn"
-                        title={selectedMessage.is_read ? "Mark unread" : "Mark read"}
-                        onClick={() => void toggleUnread()}
-                      >
-                        {selectedMessage.is_read ? <IconMailUnread /> : <IconMailRead />}
-                      </button>
-                    </>
-                  )}
-                  <button className="icon-btn danger-icon" title="Delete" onClick={() => void deleteMessage()}>
-                    <IconTrash />
-                  </button>
+              <div className="read-header">
+                <h2 className="read-subject">{selectedMessage.subject}</h2>
+                <div className="read-meta">
+                  <div className="read-avatar" style={{ background: avatarColor(selectedMessage.from) }}>
+                    {senderInitial(selectedMessage.from)}
+                  </div>
+                  <div className="read-meta-info">
+                    <div className="read-from-name">{displayName(selectedMessage.from)}</div>
+                    <div className="read-from-detail">
+                      <span>{selectedMessage.from}</span>
+                      <span className="read-meta-sep">→</span>
+                      <span>{selectedMessage.to}</span>
+                    </div>
+                  </div>
+                  <div className="read-actions">
+                    {!selectedMessage.is_outbound && (
+                      <>
+                        <button className={`icon-btn${replyMode === "reply" ? " active" : ""}`} title="Reply" onClick={() => setReplyMode("reply")}>
+                          <IconReply />
+                        </button>
+                        <button className={`icon-btn${replyMode === "reply_all" ? " active" : ""}`} title="Reply all" onClick={() => setReplyMode("reply_all")}>
+                          <IconReplyAll />
+                        </button>
+                        <button className="icon-btn" title={selectedMessage.is_read ? "Mark unread" : "Mark read"} onClick={() => void toggleUnread()}>
+                          {selectedMessage.is_read ? <IconMailUnread /> : <IconMailRead />}
+                        </button>
+                      </>
+                    )}
+                    <button className="icon-btn danger-icon" title="Delete" onClick={() => void deleteMessage()}>
+                      <IconTrash />
+                    </button>
+                  </div>
                 </div>
               </div>
+
+              <div className="read-divider" />
 
               {!selectedMessage.is_outbound && (
                 <div className="reply-box">
                   <textarea
                     value={replyBody}
                     onChange={(e) => setReplyBody(e.target.value)}
-                    placeholder={replyMode === "reply_all" ? "Write your reply all..." : "Write your reply..."}
+                    placeholder={replyMode === "reply_all" ? "Reply to all…" : "Reply…"}
                   />
                   <div className="reply-actions">
                     <button className="send-btn" onClick={() => void sendReply()} disabled={!replyBody.trim()}>
@@ -546,10 +599,13 @@ export default function App() {
                 </div>
               )}
 
-              <pre>{selectedMessage.body}</pre>
+              <pre className="read-body">{selectedMessage.body}</pre>
             </>
           ) : (
-            <p className="subtle">Select a message.</p>
+            <div className="read-empty">
+              <IconInbox />
+              <p>Select a message to read</p>
+            </div>
           )}
         </section>
       </main>
