@@ -247,6 +247,7 @@ export default function App() {
     if (!detail.is_outbound && !detail.is_read) {
       await apiRequest(`/api/messages/${detail.id}/mark-read`, "POST", token);
       setMessages((prev) => prev.map((m) => (m.id === detail.id ? { ...m, is_read: true } : m)));
+      setMasks((prev) => prev.map((m) => m.id === detail.mask_id ? { ...m, unread_count: Math.max(0, m.unread_count - 1) } : m));
     }
   }
 
