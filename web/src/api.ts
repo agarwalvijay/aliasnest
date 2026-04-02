@@ -1,8 +1,7 @@
 export type ApiMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
 const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) ||
-  `${window.location.protocol}//${window.location.hostname}:8080`;
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/+$/, "") || "";
 
 export async function apiRequest<T>(
   path: string,
