@@ -18,6 +18,7 @@ class User(Base):
 
     masks = relationship("Mask", back_populates="user")
     domains = relationship("Domain", back_populates="user")
+    api_tokens = relationship("ApiToken", back_populates="user")
 
 
 class Domain(Base):
@@ -65,3 +66,16 @@ class Message(Base):
     received_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
     mask = relationship("Mask", back_populates="messages")
+
+
+class ApiToken(Base):
+    __tablename__ = "api_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    is_revoked: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+
+    user = relationship("User", back_populates="api_tokens")

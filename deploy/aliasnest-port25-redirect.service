@@ -1,0 +1,12 @@
+[Unit]
+Description=AliasNest redirect TCP/25 to TCP/2525
+After=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/home/vagarwal/aliasnest/deploy/aliasnest-port25-redirect.sh start
+ExecStop=/home/vagarwal/aliasnest/deploy/aliasnest-port25-redirect.sh stop
+
+[Install]
+WantedBy=multi-user.target

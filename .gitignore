@@ -5,3 +5,7 @@ app/data/app.db
 app/data/messages/*.eml
 .env
 .venv/
+mobile/.expo/
+mobile/node_modules/
+web/node_modules/
+web/dist/

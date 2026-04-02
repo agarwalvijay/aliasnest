@@ -4,6 +4,7 @@ from email.message import EmailMessage
 from email.parser import BytesParser
 from email.utils import getaddresses, parseaddr
 import logging
+import hashlib
 from pathlib import Path
 import re
 import secrets
@@ -12,10 +13,11 @@ from typing import Optional
 import uuid
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi import Depends, FastAPI, Form, Header, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -42,7 +44,7 @@ from .config import (
     SMTP_PORT,
 )
 from .database import Base, SessionLocal, engine, get_db
-from .models import Domain, Mask, Message, User
+from .models import ApiToken, Domain, Mask, Message, User
 from .smtp_receiver import SMTPServerRuntime
 
 try:
@@ -308,6 +310,121 @@ def _format_dt_for_user(dt: datetime, tz_name: str, fmt: str) -> str:
     return localized.strftime(fmt)
 
 
+TIMEZONE_OPTIONS = [
+    "UTC",
+    "America/Chicago",
+    "America/New_York",
+    "America/Los_Angeles",
+    "America/Denver",
+    "America/Phoenix",
+    "America/Anchorage",
+    "Pacific/Honolulu",
+    "Europe/London",
+    "Europe/Berlin",
+    "Europe/Paris",
+    "Europe/Amsterdam",
+    "Asia/Kolkata",
+    "Asia/Singapore",
+    "Asia/Tokyo",
+    "Australia/Sydney",
+]
+
+
+class ApiLoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class ApiTimezoneRequest(BaseModel):
+    timezone: str
+
+
+class ApiCreateMaskRequest(BaseModel):
+    local_part: str
+    domain_name: str
+
+
+class ApiAddDomainRequest(BaseModel):
+    domain_name: str
+
+
+class ApiReplyRequest(BaseModel):
+    body: str
+    reply_all: bool = False
+
+
+def _hash_api_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _mint_api_token(user_id: int, db: Session) -> str:
+    plain = secrets.token_urlsafe(40)
+    db.add(ApiToken(user_id=user_id, token_hash=_hash_api_token(plain), is_revoked=False))
+    db.commit()
+    return plain
+
+
+def _message_to_api_payload(message: Message, tz_name: str) -> dict:
+    return {
+        "id": message.id,
+        "mask_id": message.mask_id,
+        "from": message.from_addr,
+        "to": message.to_addr,
+        "subject": message.subject,
+        "preview": message.text_preview,
+        "is_outbound": bool(message.is_outbound),
+        "is_read": bool(message.is_read),
+        "received_at_utc": message.received_at.isoformat() + "Z",
+        "received_at_local": _format_dt_for_user(message.received_at, tz_name, "%Y-%m-%d %H:%M:%S"),
+        "timezone": _safe_tz_name(tz_name),
+    }
+
+
+def _domain_to_api_payload(domain: Domain) -> dict:
+    return {
+        "id": domain.id,
+        "name": domain.name,
+        "is_default": bool(domain.is_default),
+        "is_verified": bool(domain.is_verified),
+        "can_use_for_mask": bool(domain.is_default or domain.is_verified),
+        "verification_token": None if domain.is_default else domain.verification_token,
+        "verify_host": None if domain.is_default else f"_relay-verify.{domain.name}",
+        "mx_host": None if domain.is_default else domain.name,
+        "mx_type": None if domain.is_default else "MX",
+        "mx_value": None if domain.is_default else (MX_TARGET_HOST or "your inbound mail host"),
+        "mx_target_host": MX_TARGET_HOST or None,
+        "public_smtp_port": int(PUBLIC_SMTP_PORT),
+    }
+
+
+def _parse_bearer_token(authorization: Optional[str]) -> Optional[str]:
+    if not authorization:
+        return None
+    parts = authorization.strip().split(" ", maxsplit=1)
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return None
+    return parts[1].strip()
+
+
+def require_api_user(
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+) -> User:
+    token = _parse_bearer_token(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+    token_hash = _hash_api_token(token)
+    token_row = db.scalar(select(ApiToken).where(ApiToken.token_hash == token_hash, ApiToken.is_revoked.is_(False)))
+    if not token_row:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    user = db.get(User, token_row.user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token user")
+    token_row.last_used_at = datetime.utcnow()
+    db.commit()
+    return user
+
+
 @app.on_event("startup")
 def startup_event():
     Base.metadata.create_all(bind=engine)
@@ -462,6 +579,387 @@ def logout_action(request: Request):
     return RedirectResponse(url="/login", status_code=302)
 
 
+@app.post("/api/auth/login")
+def api_login(payload: ApiLoginRequest, db: Session = Depends(get_db)):
+    email = payload.email.strip().lower()
+    user = db.scalar(select(User).where(User.email == email))
+    if not user or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = _mint_api_token(user.id, db)
+    return {
+        "token": token,
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "timezone": _safe_tz_name(user.timezone),
+        },
+    }
+
+
+@app.post("/api/auth/logout")
+def api_logout(
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    token = _parse_bearer_token(authorization)
+    if token:
+        token_hash = _hash_api_token(token)
+        token_row = db.scalar(select(ApiToken).where(ApiToken.token_hash == token_hash, ApiToken.is_revoked.is_(False)))
+        if token_row:
+            token_row.is_revoked = True
+            db.commit()
+    return {"ok": True}
+
+
+@app.get("/api/me")
+def api_me(user: User = Depends(require_api_user)):
+    return {
+        "id": user.id,
+        "email": user.email,
+        "timezone": _safe_tz_name(user.timezone),
+    }
+
+
+@app.patch("/api/me/timezone")
+def api_update_timezone(
+    payload: ApiTimezoneRequest,
+    user: User = Depends(require_api_user),
+    db: Session = Depends(get_db),
+):
+    db_user = db.get(User, user.id)
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    db_user.timezone = _safe_tz_name(payload.timezone)
+    db.commit()
+    return {"timezone": db_user.timezone}
+
+
+@app.get("/api/masks")
+def api_list_masks(user: User = Depends(require_api_user), db: Session = Depends(get_db)):
+    masks = db.scalars(select(Mask).where(Mask.user_id == user.id).order_by(Mask.created_at.desc())).all()
+    unread_rows = db.execute(
+        select(Message.mask_id, func.count(Message.id))
+        .join(Mask, Message.mask_id == Mask.id)
+        .where(
+            Mask.user_id == user.id,
+            Message.is_outbound.is_(False),
+            Message.is_read.is_(False),
+        )
+        .group_by(Message.mask_id)
+    ).all()
+    unread_counts = {mask_id: count for mask_id, count in unread_rows}
+    return {
+        "items": [
+            {
+                "id": mask.id,
+                "address": f"{mask.local_part}@{mask.domain}",
+                "local_part": mask.local_part,
+                "domain": mask.domain,
+                "is_active": bool(mask.is_active),
+                "unread_count": int(unread_counts.get(mask.id, 0)),
+            }
+            for mask in masks
+        ]
+    }
+
+
+@app.get("/api/domains")
+def api_list_domains(user: User = Depends(require_api_user), db: Session = Depends(get_db)):
+    domains = db.scalars(
+        select(Domain)
+        .where(or_(Domain.is_default.is_(True), Domain.user_id == user.id))
+        .order_by(Domain.is_default.desc(), Domain.created_at.desc())
+    ).all()
+    return {"items": [_domain_to_api_payload(domain) for domain in domains]}
+
+
+@app.post("/api/domains")
+def api_add_domain(
+    payload: ApiAddDomainRequest,
+    user: User = Depends(require_api_user),
+    db: Session = Depends(get_db),
+):
+    clean_domain = _normalize_domain(payload.domain_name)
+    if not _is_valid_domain(clean_domain):
+        raise HTTPException(status_code=400, detail="Invalid domain format")
+
+    existing = db.scalar(select(Domain).where(Domain.name == clean_domain))
+    if existing:
+        if existing.user_id == user.id or existing.is_default:
+            return _domain_to_api_payload(existing)
+        raise HTTPException(status_code=409, detail="Domain is already claimed by another user")
+
+    domain = Domain(
+        user_id=user.id,
+        name=clean_domain,
+        verification_token=_generate_domain_token(),
+        is_default=False,
+        is_verified=False,
+    )
+    db.add(domain)
+    db.commit()
+    db.refresh(domain)
+    return _domain_to_api_payload(domain)
+
+
+@app.post("/api/domains/{domain_id}/verify")
+def api_verify_domain(
+    domain_id: int,
+    user: User = Depends(require_api_user),
+    db: Session = Depends(get_db),
+):
+    domain = db.scalar(select(Domain).where(Domain.id == domain_id, Domain.user_id == user.id))
+    if not domain:
+        raise HTTPException(status_code=404, detail="Domain not found")
+    if domain.is_verified:
+        return _domain_to_api_payload(domain)
+    if not DNS_AVAILABLE:
+        raise HTTPException(status_code=400, detail="DNS verification requires dnspython")
+
+    verify_host = f"_relay-verify.{domain.name}"
+    try:
+        txt_answers = dns.resolver.resolve(verify_host, "TXT")
+        txt_values = _extract_txt_values(txt_answers)
+    except DNSException:
+        raise HTTPException(status_code=400, detail="TXT record not found yet")
+
+    if domain.verification_token not in txt_values:
+        raise HTTPException(status_code=400, detail="TXT token mismatch")
+
+    try:
+        mx_answers = dns.resolver.resolve(domain.name, "MX")
+        mx_hosts = _extract_mx_hosts(mx_answers)
+    except DNSException:
+        raise HTTPException(status_code=400, detail="MX record not found yet")
+
+    if MX_TARGET_HOST and MX_TARGET_HOST not in mx_hosts:
+        raise HTTPException(status_code=400, detail=f"MX must include {MX_TARGET_HOST}")
+
+    domain.is_verified = True
+    domain.verified_at = datetime.utcnow()
+    db.commit()
+    db.refresh(domain)
+    return _domain_to_api_payload(domain)
+
+
+@app.delete("/api/domains/{domain_id}")
+def api_delete_domain(
+    domain_id: int,
+    user: User = Depends(require_api_user),
+    db: Session = Depends(get_db),
+):
+    domain = db.scalar(select(Domain).where(Domain.id == domain_id, Domain.user_id == user.id))
+    if not domain:
+        raise HTTPException(status_code=404, detail="Domain not found")
+    if domain.is_default:
+        raise HTTPException(status_code=400, detail="Default domain cannot be deleted")
+
+    mask_exists = db.scalar(select(Mask).where(Mask.domain == domain.name))
+    if mask_exists:
+        raise HTTPException(status_code=400, detail="Delete masks on this domain first")
+
+    db.delete(domain)
+    db.commit()
+    return {"ok": True}
+
+
+@app.post("/api/masks")
+def api_create_mask(
+    payload: ApiCreateMaskRequest,
+    user: User = Depends(require_api_user),
+    db: Session = Depends(get_db),
+):
+    clean_local = payload.local_part.strip().lower()
+    clean_domain = _normalize_domain(payload.domain_name)
+    if not _is_valid_local_part(clean_local):
+        raise HTTPException(status_code=400, detail="Invalid mask name")
+
+    selected_domain = db.scalar(
+        select(Domain).where(
+            Domain.name == clean_domain,
+            Domain.is_verified.is_(True),
+            or_(Domain.is_default.is_(True), Domain.user_id == user.id),
+        )
+    )
+    if not selected_domain:
+        raise HTTPException(status_code=400, detail="Domain not verified or unavailable")
+
+    existing = db.scalar(select(Mask).where(Mask.local_part == clean_local, Mask.domain == clean_domain))
+    if existing:
+        if existing.user_id == user.id:
+            return {
+                "id": existing.id,
+                "address": f"{existing.local_part}@{existing.domain}",
+                "local_part": existing.local_part,
+                "domain": existing.domain,
+                "is_active": bool(existing.is_active),
+            }
+        raise HTTPException(status_code=409, detail="Mask already exists")
+
+    mask = Mask(user_id=user.id, local_part=clean_local, domain=clean_domain)
+    db.add(mask)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Mask already exists")
+    db.refresh(mask)
+    return {
+        "id": mask.id,
+        "address": f"{mask.local_part}@{mask.domain}",
+        "local_part": mask.local_part,
+        "domain": mask.domain,
+        "is_active": bool(mask.is_active),
+    }
+
+
+@app.delete("/api/masks/{mask_id}")
+def api_delete_mask(mask_id: int, user: User = Depends(require_api_user), db: Session = Depends(get_db)):
+    mask = db.scalar(select(Mask).where(Mask.id == mask_id, Mask.user_id == user.id))
+    if not mask:
+        raise HTTPException(status_code=404, detail="Mask not found")
+
+    messages = db.scalars(select(Message).where(Message.mask_id == mask.id)).all()
+    for message in messages:
+        try:
+            raw_file = Path(message.raw_path)
+            if raw_file.exists():
+                raw_file.unlink()
+        except OSError:
+            pass
+        db.delete(message)
+    db.delete(mask)
+    db.commit()
+    return {"ok": True}
+
+
+@app.get("/api/masks/{mask_id}/messages")
+def api_list_mask_messages(
+    mask_id: int,
+    limit: int = 100,
+    user: User = Depends(require_api_user),
+    db: Session = Depends(get_db),
+):
+    mask = db.scalar(select(Mask).where(Mask.id == mask_id, Mask.user_id == user.id))
+    if not mask:
+        raise HTTPException(status_code=404, detail="Mask not found")
+    safe_limit = max(1, min(limit, 200))
+    messages = db.scalars(
+        select(Message)
+        .where(Message.mask_id == mask.id)
+        .order_by(Message.received_at.desc())
+        .limit(safe_limit)
+    ).all()
+    tz_name = _safe_tz_name(user.timezone)
+    return {
+        "mask": {
+            "id": mask.id,
+            "address": f"{mask.local_part}@{mask.domain}",
+            "domain": mask.domain,
+            "local_part": mask.local_part,
+        },
+        "items": [_message_to_api_payload(message, tz_name) for message in messages],
+    }
+
+
+def _api_get_message_for_user(message_id: int, user_id: int, db: Session) -> Message:
+    message = db.scalar(
+        select(Message)
+        .join(Mask, Message.mask_id == Mask.id)
+        .where(Message.id == message_id, Mask.user_id == user_id)
+    )
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+    return message
+
+
+@app.get("/api/messages/{message_id}")
+def api_get_message(message_id: int, user: User = Depends(require_api_user), db: Session = Depends(get_db)):
+    message = _api_get_message_for_user(message_id, user.id, db)
+    data = _message_to_api_payload(message, _safe_tz_name(user.timezone))
+    data["body"] = _extract_message_body(message)
+    return data
+
+
+@app.post("/api/messages/{message_id}/mark-read")
+def api_mark_message_read(message_id: int, user: User = Depends(require_api_user), db: Session = Depends(get_db)):
+    message = _api_get_message_for_user(message_id, user.id, db)
+    message.is_read = True
+    db.commit()
+    return {"ok": True, "is_read": True}
+
+
+@app.post("/api/messages/{message_id}/mark-unread")
+def api_mark_message_unread(message_id: int, user: User = Depends(require_api_user), db: Session = Depends(get_db)):
+    message = _api_get_message_for_user(message_id, user.id, db)
+    if not message.is_outbound:
+        message.is_read = False
+        db.commit()
+    return {"ok": True, "is_read": bool(message.is_read)}
+
+
+@app.delete("/api/messages/{message_id}")
+def api_delete_message(message_id: int, user: User = Depends(require_api_user), db: Session = Depends(get_db)):
+    message = _api_get_message_for_user(message_id, user.id, db)
+    try:
+        raw_file = Path(message.raw_path)
+        if raw_file.exists():
+            raw_file.unlink()
+    except OSError:
+        pass
+    db.delete(message)
+    db.commit()
+    return {"ok": True}
+
+
+@app.post("/api/messages/{message_id}/reply")
+def api_reply_message(
+    message_id: int,
+    payload: ApiReplyRequest,
+    user: User = Depends(require_api_user),
+    db: Session = Depends(get_db),
+):
+    message = _api_get_message_for_user(message_id, user.id, db)
+    if message.is_outbound:
+        raise HTTPException(status_code=400, detail="Cannot reply to an outbound message")
+    mask = db.get(Mask, message.mask_id)
+    if not mask:
+        raise HTTPException(status_code=404, detail="Mask not found")
+    if not _can_send_from_domain(mask.domain):
+        raise HTTPException(status_code=400, detail=f"Reply not enabled for {mask.domain}")
+    cleaned_reply = payload.body.strip()
+    if not cleaned_reply:
+        raise HTTPException(status_code=400, detail="Reply body cannot be empty")
+
+    target_email, in_reply_to, references, original_subject, to_cc_addresses = _reply_metadata(message)
+    target_emails = _compute_reply_targets(mask, target_email, to_cc_addresses, payload.reply_all)
+    if not target_emails:
+        raise HTTPException(status_code=400, detail="No valid reply recipient found")
+    try:
+        sent_msg, sender, sent_subject = _send_reply_email(mask, target_emails, cleaned_reply, in_reply_to, references, original_subject)
+    except Exception as exc:
+        logger.exception("API reply send failed. message_id=%s", message.id)
+        raise HTTPException(status_code=502, detail=f"Failed to send reply: {str(exc)}") from exc
+
+    MESSAGE_DIR.mkdir(parents=True, exist_ok=True)
+    outbound_raw_path = MESSAGE_DIR / f"{uuid.uuid4().hex}.eml"
+    outbound_raw_path.write_bytes(sent_msg.as_bytes())
+    outbound = Message(
+        mask_id=mask.id,
+        from_addr=sender[:500],
+        to_addr=", ".join(target_emails)[:500],
+        subject=sent_subject[:500],
+        text_preview=cleaned_reply[:2000],
+        is_outbound=True,
+        is_read=True,
+        raw_path=outbound_raw_path.as_posix(),
+    )
+    db.add(outbound)
+    db.commit()
+    db.refresh(outbound)
+    return _message_to_api_payload(outbound, _safe_tz_name(user.timezone))
+
+
 @app.post("/settings/timezone")
 def update_timezone(
     timezone: str = Form(...),
@@ -575,24 +1073,7 @@ def dashboard(
             "active_message": active_message,
             "active_message_body": _extract_message_body(active_message) if active_message else "",
             "user_timezone": user_timezone,
-            "timezone_options": [
-                "UTC",
-                "America/Chicago",
-                "America/New_York",
-                "America/Los_Angeles",
-                "America/Denver",
-                "America/Phoenix",
-                "America/Anchorage",
-                "Pacific/Honolulu",
-                "Europe/London",
-                "Europe/Berlin",
-                "Europe/Paris",
-                "Europe/Amsterdam",
-                "Asia/Kolkata",
-                "Asia/Singapore",
-                "Asia/Tokyo",
-                "Australia/Sydney",
-            ],
+            "timezone_options": TIMEZONE_OPTIONS,
             "now": datetime.utcnow(),
         },
     )
@@ -622,7 +1103,9 @@ def create_mask(
 
     existing = db.scalar(select(Mask).where(Mask.local_part == clean_local, Mask.domain == clean_domain))
     if existing:
-        return RedirectResponse(url=f"/dashboard?selected_mask={existing.id}&info=Mask+already+exists", status_code=302)
+        if existing.user_id == user.id:
+            return RedirectResponse(url=f"/dashboard?selected_mask={existing.id}&info=Mask+already+exists", status_code=302)
+        return RedirectResponse(url="/dashboard?error=Mask+already+exists", status_code=302)
 
     mask = Mask(user_id=user.id, local_part=clean_local, domain=clean_domain)
     db.add(mask)
@@ -632,7 +1115,9 @@ def create_mask(
         db.rollback()
         existing = db.scalar(select(Mask).where(Mask.local_part == clean_local, Mask.domain == clean_domain))
         if existing:
-            return RedirectResponse(url=f"/dashboard?selected_mask={existing.id}&info=Mask+already+exists", status_code=302)
+            if existing.user_id == user.id:
+                return RedirectResponse(url=f"/dashboard?selected_mask={existing.id}&info=Mask+already+exists", status_code=302)
+            return RedirectResponse(url="/dashboard?error=Mask+already+exists", status_code=302)
         return RedirectResponse(url="/dashboard?error=Could+not+create+mask", status_code=302)
     db.refresh(mask)
     return RedirectResponse(url=f"/dashboard?selected_mask={mask.id}&info=Mask+created", status_code=302)

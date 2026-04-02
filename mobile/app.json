@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "AliasNest",
+    "slug": "aliasnest",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.aliasnest.app"
+    },
+    "android": {
+      "package": "com.aliasnest.app"
+    },
+    "extra": {
+      "apiBaseUrl": "http://localhost:8080"
+    }
+  }
+}

@@ -75,3 +75,158 @@ PY
 - Recommended: set `MX_TARGET_HOST` to your public mail host (example `mail.yourdomain.com`) and ensure:
   - `A/AAAA` for that host points to your public IP
   - Router forwards TCP `PUBLIC_SMTP_PORT` (typically `25`) to your server SMTP port
+
+## Mobile App (Expo)
+
+A mobile client scaffold is included at `mobile/`.
+
+### Start mobile dev server
+
+```bash
+cd mobile
+npm install
+npm run start
+```
+
+### Configure API base URL
+
+Set `EXPO_PUBLIC_API_BASE_URL` before start:
+
+```bash
+EXPO_PUBLIC_API_BASE_URL=http://<server-ip>:8080 npm run start
+```
+
+- iOS simulator can use `http://127.0.0.1:8080` if API runs on same Mac.
+- Android emulator typically needs `http://10.0.2.2:8080`.
+- Physical device must use LAN/public IP reachable from the phone.
+
+### Mobile features currently wired to API
+
+- Login/logout with bearer token auth (`/api/auth/*`)
+- List/create/delete masks
+- List/open/read/unread/delete/reply messages
+- List/add/verify/delete custom domains
+- Update timezone
+
+## Modern Web App (React + Vite)
+
+A new API-driven web frontend is included at `web/`.
+
+### Run web dev
+
+```bash
+cd web
+npm install
+VITE_API_BASE_URL=http://<server-ip>:8080 npm run dev -- --host
+```
+
+Build for production:
+
+```bash
+cd web
+npm run build
+```
+
+This produces `web/dist/` for Nginx static hosting.
+
+## Deploy On Ubuntu Server (No Docker)
+
+Assumes clone path: `/home/vagarwal/aliasnest`
+
+### 1) Setup Python app
+
+```bash
+cd /home/vagarwal/aliasnest
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### 2) Configure environment
+
+Create/update `.env`:
+
+```env
+SECRET_KEY=<long-random-secret>
+DATABASE_URL=sqlite:////home/vagarwal/aliasnest/app/data/app.db
+DEFAULT_DOMAIN=aliasnest.com
+SMTP_HOST=0.0.0.0
+SMTP_PORT=2525
+PUBLIC_SMTP_PORT=25
+MX_TARGET_HOST=mx.aliasnest.com
+SIGNUP_OPEN=false
+```
+
+### 3) Install systemd services
+
+```bash
+sudo cp deploy/aliasnest.service /etc/systemd/system/
+sudo cp deploy/aliasnest-port25-redirect.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now aliasnest.service
+sudo systemctl enable --now aliasnest-port25-redirect.service
+sudo systemctl status aliasnest.service
+```
+
+### 4) Nginx (API + web app)
+
+Example Nginx site:
+
+```nginx
+server {
+  listen 80;
+  server_name aliasnest.com;
+
+  root /home/vagarwal/aliasnest/web/dist;
+  index index.html;
+
+  location /api/ {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  location / {
+    try_files $uri /index.html;
+  }
+}
+```
+
+Then:
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+## Build Android APK For Sideload
+
+`mobile/eas.json` is included with an APK profile.
+
+### 1) Install tooling and login
+
+```bash
+cd mobile
+npm install
+npm install -g eas-cli
+eas login
+```
+
+### 2) Configure mobile API URL for production
+
+Set public API URL in app config for runtime env (recommended via EAS env var):
+
+```bash
+eas env:create --name EXPO_PUBLIC_API_BASE_URL --value https://aliasnest.com --scope project
+```
+
+### 3) Build APK
+
+```bash
+cd mobile
+eas build -p android --profile preview
+```
+
+When build completes, download the `.apk` and sideload on Android.
