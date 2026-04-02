@@ -1,6 +1,84 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiRequest } from "./api";
 
+// ── SVG icons ──────────────────────────────────────────────────────────────
+const IconSettings = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+  </svg>
+);
+const IconRefresh = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 12A8 8 0 1 1 17.6 6.3"/>
+    <path d="M18 3.8V7.8H14"/>
+  </svg>
+);
+const IconLogout = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+    <polyline points="16 17 21 12 16 7"/>
+    <line x1="21" y1="12" x2="9" y2="12"/>
+  </svg>
+);
+const IconClose = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <line x1="18" y1="6" x2="6" y2="18"/>
+    <line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+);
+const IconReply = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10 7L4 12L10 17"/>
+    <path d="M5 12H13C17.4 12 20 14.4 20 19"/>
+  </svg>
+);
+const IconReplyAll = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 7L5 12L11 17"/>
+    <path d="M6 12H12.5C15.8 12 17.8 13.3 19.3 16"/>
+    <path d="M8 4.8L2 9.8L8 14.8" strokeWidth="1.6"/>
+    <path d="M3 9.8H9" strokeWidth="1.6"/>
+  </svg>
+);
+const IconMailRead = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="4" y="6" width="16" height="12" rx="2.2"/>
+    <path d="M4.8 7L11.3 12.1C11.7 12.4 12.3 12.4 12.7 12.1L19.2 7"/>
+  </svg>
+);
+const IconMailUnread = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="4" y="6" width="16" height="12" rx="2.2"/>
+    <path d="M4.8 7L11.3 12.1C11.7 12.4 12.3 12.4 12.7 12.1L19.2 7"/>
+    <circle cx="18.6" cy="6.2" r="2.2" fill="#0a66c2" stroke="none"/>
+  </svg>
+);
+const IconTrash = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+    <path d="M8 7H16M10 4H14M6.8 7L7.6 18.2C7.7 19.2 8.5 20 9.5 20H14.5C15.5 20 16.3 19.2 16.4 18.2L17.2 7"/>
+    <path d="M10 10V16M14 10V16"/>
+  </svg>
+);
+const IconCopy = () => (
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="9" y="9" width="13" height="13" rx="2"/>
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+  </svg>
+);
+const IconPlus = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <line x1="12" y1="5" x2="12" y2="19"/>
+    <line x1="5" y1="12" x2="19" y2="12"/>
+  </svg>
+);
+const IconCheck = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+);
+// ── end icons ───────────────────────────────────────────────────────────────
+
 type User = { id: number; email: string; timezone: string };
 type Mask = { id: number; address: string; local_part: string; domain: string; unread_count: number };
 type Domain = {
@@ -209,7 +287,7 @@ export default function App() {
     try {
       await navigator.clipboard.writeText(value);
     } catch {
-      // no-op: clipboard permission can fail on older browsers
+      // no-op
     }
   }
 
@@ -261,7 +339,7 @@ export default function App() {
           <h1>AliasNest</h1>
           {error && <p className="error">{error}</p>}
           <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
-          <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" type="password" />
+          <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" type="password" onKeyDown={(e) => e.key === "Enter" && void login()} />
           <button onClick={() => void login()} disabled={busy}>{busy ? "Signing in..." : "Sign in"}</button>
         </div>
       </div>
@@ -276,105 +354,132 @@ export default function App() {
         </div>
         <div className="top-actions">
           <span className="user-pill">{user?.email}</span>
-          <button className={`top-icon ${showSettings ? "active" : ""}`} title="Settings" onClick={() => setShowSettings((v) => !v)}>⚙</button>
-          <button className="top-icon" title="Refresh" onClick={() => token && void hydrate(token, selectedMaskId)}>⟳</button>
-          <button className="top-icon" title="Sign out" onClick={() => void logout()}>⎋</button>
+          <button className={`top-icon${showSettings ? " active" : ""}`} title="Settings" onClick={() => setShowSettings((v) => !v)}>
+            <IconSettings />
+          </button>
+          <button className="top-icon" title="Refresh" onClick={() => token && void hydrate(token, selectedMaskId)}>
+            <IconRefresh />
+          </button>
+          <button className="top-icon" title="Sign out" onClick={() => void logout()}>
+            <IconLogout />
+          </button>
         </div>
       </header>
 
       {error && <p className="error page-error">{error}</p>}
 
-      {showSettings ? (
-        <section className="card settings-card">
-          <div className="settings-grid">
-            <div className="settings-block">
-              <h3>Timezone</h3>
-              <div className="row-inline">
-                <select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
-                  {TIMEZONE_OPTIONS.map((tz) => <option value={tz} key={tz}>{tz}</option>)}
-                </select>
-                <button className="icon-btn" onClick={() => void updateTimezone()}>✓</button>
-              </div>
+      {/* Settings modal */}
+      {showSettings && (
+        <>
+          <div className="settings-backdrop" onClick={() => setShowSettings(false)} />
+          <div className="settings-modal card">
+            <div className="settings-modal-head">
+              <h2>Settings</h2>
+              <button className="icon-btn" onClick={() => setShowSettings(false)} title="Close">
+                <IconClose />
+              </button>
             </div>
 
-            <div className="settings-block">
-              <h3>Custom Domains</h3>
-              <div className="row-inline">
-                <input value={newDomain} onChange={(e) => setNewDomain(e.target.value)} placeholder="example.com" />
-                <button className="icon-btn" onClick={() => void addDomain()}>＋</button>
+            <div className="settings-grid">
+              <div className="settings-block">
+                <h3>Timezone</h3>
+                <div className="row-inline">
+                  <select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
+                    {TIMEZONE_OPTIONS.map((tz) => <option value={tz} key={tz}>{tz}</option>)}
+                  </select>
+                  <button className="icon-btn" title="Save" onClick={() => void updateTimezone()}><IconCheck /></button>
+                </div>
               </div>
-              <div className="stack">
-                {domains.filter((d) => !d.is_default).map((d) => (
-                  <article className="sub-card" key={d.id}>
-                    <div className="sub-card-head">
-                      <strong>{d.name}</strong>
-                      <div className="row-inline">
-                        {!d.is_verified ? <button onClick={() => void verifyDomain(d.id)}>Verify</button> : null}
-                        <button className="danger icon-btn danger-icon" onClick={() => void deleteDomain(d.id)} title="Delete domain">🗑</button>
-                      </div>
-                    </div>
-                    <p>{d.is_verified ? "Verified" : "Pending verification"}</p>
-                    {!d.is_verified ? (
-                      <div className="dns-grid">
-                        <span>TXT host</span>
-                        <code>{d.verify_host || ""}</code>
-                        <button className="icon-btn" title="Copy TXT host" onClick={() => void copyToClipboard(d.verify_host)}>⧉</button>
-                        <span>TXT value</span>
-                        <code>{d.verification_token || ""}</code>
-                        <button className="icon-btn" title="Copy TXT value" onClick={() => void copyToClipboard(d.verification_token)}>⧉</button>
-                        <span>MX host</span>
-                        <code>{d.mx_host || ""}</code>
-                        <button className="icon-btn" title="Copy MX host" onClick={() => void copyToClipboard(d.mx_host)}>⧉</button>
-                        <span>MX type</span>
-                        <code>{d.mx_type || ""}</code>
-                        <button className="icon-btn" title="Copy MX type" onClick={() => void copyToClipboard(d.mx_type)}>⧉</button>
-                        <span>MX value</span>
-                        <code>{d.mx_value || ""}</code>
-                        <button className="icon-btn" title="Copy MX value" onClick={() => void copyToClipboard(d.mx_value)}>⧉</button>
-                      </div>
-                    ) : null}
-                  </article>
-                ))}
-              </div>
-            </div>
 
-            <div className="settings-block">
-              <h3>Create Mask</h3>
-              <div className="row-inline">
-                <input value={newMaskLocal} onChange={(e) => setNewMaskLocal(e.target.value)} placeholder="shopping-1" />
-                <select value={newMaskDomain} onChange={(e) => setNewMaskDomain(e.target.value)}>
-                  {verifiedDomainNames.map((d) => <option key={d} value={d}>{d}</option>)}
-                </select>
-                <button className="icon-btn" onClick={() => void createMask()}>＋</button>
+              <div className="settings-block">
+                <h3>Custom Domains</h3>
+                <div className="row-inline">
+                  <input value={newDomain} onChange={(e) => setNewDomain(e.target.value)} placeholder="example.com" />
+                  <button className="icon-btn" title="Add domain" onClick={() => void addDomain()}><IconPlus /></button>
+                </div>
+                <div className="stack">
+                  {domains.filter((d) => !d.is_default).map((d) => (
+                    <article className="sub-card" key={d.id}>
+                      <div className="sub-card-head">
+                        <strong>{d.name}</strong>
+                        <div className="row-inline">
+                          {!d.is_verified && <button onClick={() => void verifyDomain(d.id)}>Verify</button>}
+                          <button className="icon-btn danger-icon" onClick={() => void deleteDomain(d.id)} title="Delete domain"><IconTrash /></button>
+                        </div>
+                      </div>
+                      <p>{d.is_verified ? "Verified" : "Pending verification"}</p>
+                      {!d.is_verified && (
+                        <div className="dns-grid">
+                          <span>TXT host</span>
+                          <code>{d.verify_host || ""}</code>
+                          <button className="icon-btn" title="Copy" onClick={() => void copyToClipboard(d.verify_host)}><IconCopy /></button>
+                          <span>TXT value</span>
+                          <code>{d.verification_token || ""}</code>
+                          <button className="icon-btn" title="Copy" onClick={() => void copyToClipboard(d.verification_token)}><IconCopy /></button>
+                          <span>MX host</span>
+                          <code>{d.mx_host || ""}</code>
+                          <button className="icon-btn" title="Copy" onClick={() => void copyToClipboard(d.mx_host)}><IconCopy /></button>
+                          <span>MX type</span>
+                          <code>{d.mx_type || ""}</code>
+                          <button className="icon-btn" title="Copy" onClick={() => void copyToClipboard(d.mx_type)}><IconCopy /></button>
+                          <span>MX value</span>
+                          <code>{d.mx_value || ""}</code>
+                          <button className="icon-btn" title="Copy" onClick={() => void copyToClipboard(d.mx_value)}><IconCopy /></button>
+                        </div>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              </div>
+
+              <div className="settings-block">
+                <h3>Create Mask</h3>
+                <div className="row-inline">
+                  <input value={newMaskLocal} onChange={(e) => setNewMaskLocal(e.target.value)} placeholder="shopping-1" />
+                  <select value={newMaskDomain} onChange={(e) => setNewMaskDomain(e.target.value)}>
+                    {verifiedDomainNames.map((d) => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                  <button className="icon-btn" title="Create mask" onClick={() => void createMask()}><IconPlus /></button>
+                </div>
               </div>
             </div>
           </div>
-        </section>
-      ) : null}
+        </>
+      )}
 
       <main className="layout">
         <aside className="card sidebar">
-          <button className={!selectedMaskId ? "active" : ""} onClick={() => token && void hydrate(token, null)}>All inbox</button>
+          <button
+            className={!selectedMaskId ? "active" : ""}
+            onClick={() => {
+              setSelectedMessage(null);
+              token && void hydrate(token, null);
+            }}
+          >
+            All inbox
+          </button>
           {masks.map((mask) => (
             <div className="mask-row" key={mask.id}>
               <button
                 className={selectedMaskId === mask.id ? "active" : ""}
                 onClick={() => {
                   if (!token) return;
+                  setSelectedMessage(null);
                   setSelectedMaskId(mask.id);
                   void loadMessages(token, mask.id, masks);
                 }}
               >
-                {mask.address} {mask.unread_count > 0 ? `(${mask.unread_count})` : ""}
+                {mask.address} {mask.unread_count > 0 ? <span className="unread-badge">{mask.unread_count}</span> : null}
               </button>
-              <button className="icon-btn danger-icon" onClick={() => void deleteMask(mask.id)}>🗑</button>
+              <button className="icon-btn danger-icon" title="Delete mask" onClick={() => void deleteMask(mask.id)}><IconTrash /></button>
             </div>
           ))}
         </aside>
 
         <section className="card list">
+          {messages.length === 0 && <p className="subtle">No messages yet.</p>}
           {messages.map((msg) => (
-            <button key={msg.id} className={`message-row ${!msg.is_outbound && !msg.is_read ? "unread" : ""}`} onClick={() => void openMessage(msg.id)}>
+            <button key={msg.id} className={`message-row${!msg.is_outbound && !msg.is_read ? " unread" : ""}`} onClick={() => void openMessage(msg.id)}>
               <div className="line1">
                 <strong>{msg.is_outbound ? `To: ${msg.to}` : msg.from}</strong>
                 <span>{msg.received_at_local}</span>
@@ -395,32 +500,38 @@ export default function App() {
                   <p>To: {selectedMessage.to}</p>
                 </div>
                 <div className="msg-actions">
-                  {!selectedMessage.is_outbound ? (
+                  {!selectedMessage.is_outbound && (
                     <>
                       <button
-                        className={`icon-btn ${replyMode === "reply" ? "active" : ""}`}
+                        className={`icon-btn${replyMode === "reply" ? " active" : ""}`}
                         title="Reply"
                         onClick={() => setReplyMode("reply")}
                       >
-                        ↩
+                        <IconReply />
                       </button>
                       <button
-                        className={`icon-btn ${replyMode === "reply_all" ? "active" : ""}`}
+                        className={`icon-btn${replyMode === "reply_all" ? " active" : ""}`}
                         title="Reply all"
                         onClick={() => setReplyMode("reply_all")}
                       >
-                        ↪
+                        <IconReplyAll />
                       </button>
-                      <button className="icon-btn" title={selectedMessage.is_read ? "Mark unread" : "Mark read"} onClick={() => void toggleUnread()}>
-                        {selectedMessage.is_read ? "✉" : "✉•"}
+                      <button
+                        className="icon-btn"
+                        title={selectedMessage.is_read ? "Mark unread" : "Mark read"}
+                        onClick={() => void toggleUnread()}
+                      >
+                        {selectedMessage.is_read ? <IconMailUnread /> : <IconMailRead />}
                       </button>
                     </>
-                  ) : null}
-                  <button className="icon-btn danger-icon" title="Delete" onClick={() => void deleteMessage()}>🗑</button>
+                  )}
+                  <button className="icon-btn danger-icon" title="Delete" onClick={() => void deleteMessage()}>
+                    <IconTrash />
+                  </button>
                 </div>
               </div>
 
-              {!selectedMessage.is_outbound ? (
+              {!selectedMessage.is_outbound && (
                 <div className="reply-box">
                   <textarea
                     value={replyBody}
@@ -433,12 +544,12 @@ export default function App() {
                     </button>
                   </div>
                 </div>
-              ) : null}
+              )}
 
               <pre>{selectedMessage.body}</pre>
             </>
           ) : (
-            <p>Select a message.</p>
+            <p className="subtle">Select a message.</p>
           )}
         </section>
       </main>
