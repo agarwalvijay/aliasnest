@@ -19,6 +19,17 @@ import {
 import * as SecureStore from "expo-secure-store";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
+import * as Notifications from "expo-notifications";
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
 
 import { apiRequest } from "./src/api";
 
@@ -33,6 +44,7 @@ type Mask = {
   address: string;
   local_part: string;
   domain: string;
+  is_active: boolean;
   unread_count: number;
 };
 
@@ -69,7 +81,7 @@ type MessageDetail = Message & { body: string };
 
 type InboxMessage = Message & { mask_address: string };
 
-type ViewMode = "inbox" | "message" | "settings";
+type ViewMode = "inbox" | "message" | "settings" | "register";
 
 const TOKEN_KEY = "aliasnest_token";
 const AVATAR_COLORS = ["#2f80ed", "#f2994a", "#eb5757", "#9b51e0", "#27ae60", "#56ccf2", "#bb6bd9"];
@@ -130,6 +142,10 @@ export default function App() {
   const [token, setToken] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [regEmail, setRegEmail] = useState("");
+  const [regPassword, setRegPassword] = useState("");
+  const [regConfirm, setRegConfirm] = useState("");
+  const [regInvite, setRegInvite] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const [viewMode, setViewMode] = useState<ViewMode>("inbox");
@@ -296,6 +312,7 @@ export default function App() {
       await SecureStore.setItemAsync(TOKEN_KEY, payload.token);
       setToken(payload.token);
       setViewMode("inbox");
+      void registerPushToken(payload.token);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Login failed");
     } finally {
@@ -572,6 +589,54 @@ export default function App() {
     ]);
   }
 
+  async function toggleMask(maskId: number, isActive: boolean) {
+    if (!token) return;
+    try {
+      await apiRequest(`/api/masks/${maskId}`, "PATCH", token, { is_active: isActive });
+      setMasks((prev) => prev.map((m) => m.id === maskId ? { ...m, is_active: isActive } : m));
+    } catch (e) {
+      Alert.alert("Error", e instanceof Error ? e.message : "Failed to update mask");
+    }
+  }
+
+  async function doRegister() {
+    setError(null);
+    if (regPassword !== regConfirm) { setError("Passwords do not match."); return; }
+    if (regPassword.length < 8) { setError("Password must be at least 8 characters."); return; }
+    setBusy(true);
+    try {
+      const payload = await apiRequest<{ token: string }>("/api/auth/register", "POST", undefined, {
+        email: regEmail.trim().toLowerCase(),
+        password: regPassword,
+        invite_code: regInvite.trim(),
+      });
+      await SecureStore.setItemAsync(TOKEN_KEY, payload.token);
+      setToken(payload.token);
+      setViewMode("inbox");
+      void registerPushToken(payload.token);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Registration failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function registerPushToken(activeToken: string) {
+    try {
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== "granted") return;
+      // getDevicePushTokenAsync returns the native FCM token (Android) or APNs token (iOS)
+      // This bypasses Expo's relay — server sends directly via Firebase Admin SDK
+      const deviceToken = await Notifications.getDevicePushTokenAsync();
+      await apiRequest("/api/push-token", "POST", activeToken, {
+        token: deviceToken.data,
+        platform: deviceToken.type, // "fcm" | "apns"
+      });
+    } catch {
+      // Non-fatal: push notifications are optional
+    }
+  }
+
   async function copyValue(label: string, value: string | null | undefined) {
     const cleaned = (value || "").trim();
     if (!cleaned) return;
@@ -588,6 +653,59 @@ export default function App() {
   }
 
   if (!token) {
+    if (viewMode === "register") {
+      return (
+        <SafeAreaView style={[styles.container, { paddingTop: topInset }]}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1, justifyContent: "center" }}>
+            <ScrollView contentContainerStyle={styles.loginCard} keyboardShouldPersistTaps="handled">
+              <Text style={styles.brand}>AliasNest</Text>
+              <Text style={styles.subtitle}>Create an account</Text>
+              {error ? <Text style={styles.error}>{error}</Text> : null}
+              <TextInput
+                value={regEmail}
+                onChangeText={setRegEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                returnKeyType="next"
+                placeholder="Email"
+                style={styles.input}
+              />
+              <TextInput
+                value={regPassword}
+                onChangeText={setRegPassword}
+                secureTextEntry
+                placeholder="Password (min 8 chars)"
+                returnKeyType="next"
+                style={styles.input}
+              />
+              <TextInput
+                value={regConfirm}
+                onChangeText={setRegConfirm}
+                secureTextEntry
+                placeholder="Confirm password"
+                returnKeyType="next"
+                style={styles.input}
+              />
+              <TextInput
+                value={regInvite}
+                onChangeText={setRegInvite}
+                autoCapitalize="none"
+                placeholder="Invite code (if required)"
+                returnKeyType="done"
+                onSubmitEditing={() => void doRegister()}
+                style={styles.input}
+              />
+              <TouchableOpacity style={styles.primaryBtn} onPress={() => void doRegister()} disabled={busy}>
+                <Text style={styles.primaryBtnText}>{busy ? "Creating account…" : "Create account"}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => { setViewMode("inbox"); setError(null); }} style={styles.switchAuthBtn}>
+                <Text style={styles.switchAuthText}>Already have an account? <Text style={styles.switchAuthLink}>Sign in</Text></Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      );
+    }
     return (
       <SafeAreaView style={[styles.container, { paddingTop: topInset }]}>
         <View style={styles.loginCard}>
@@ -616,6 +734,9 @@ export default function App() {
           />
           <TouchableOpacity style={styles.primaryBtn} onPress={doLogin} disabled={busy}>
             <Text style={styles.primaryBtnText}>{busy ? "Signing in..." : "Sign in"}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => { setViewMode("register"); setError(null); }} style={styles.switchAuthBtn}>
+            <Text style={styles.switchAuthText}>New to AliasNest? <Text style={styles.switchAuthLink}>Create account</Text></Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -954,11 +1075,16 @@ export default function App() {
 
           <View style={styles.settingsList}>
             {masks.map((mask) => (
-              <View key={mask.id} style={styles.settingsRow}>
+              <View key={mask.id} style={[styles.settingsRow, !mask.is_active && styles.settingsRowPaused]}>
                 <View style={styles.settingsRowMain}>
-                  <Text style={styles.settingsRowTitle}>{mask.address}</Text>
-                  <Text style={styles.settingsRowSubtitle}>{mask.unread_count} unread</Text>
+                  <Text style={[styles.settingsRowTitle, !mask.is_active && styles.settingsRowTitlePaused]}>{mask.address}</Text>
+                  <Text style={styles.settingsRowSubtitle}>
+                    {mask.is_active ? `${mask.unread_count} unread` : "Paused — not accepting mail"}
+                  </Text>
                 </View>
+                <TouchableOpacity style={styles.pauseIconBtn} onPress={() => void toggleMask(mask.id, !mask.is_active)}>
+                  <MaterialCommunityIcons name={mask.is_active ? "pause-circle-outline" : "play-circle-outline"} size={20} color={mask.is_active ? "#607089" : "#27ae60"} />
+                </TouchableOpacity>
                 <TouchableOpacity style={styles.deleteIconBtn} onPress={() => void deleteMask(mask.id)}>
                   <MaterialCommunityIcons name="trash-can-outline" size={16} color="#c4314b" />
                 </TouchableOpacity>
@@ -985,11 +1111,12 @@ export default function App() {
             {masks.map((mask) => (
               <TouchableOpacity
                 key={mask.id}
-                style={[styles.drawerItem, selectedMaskId === mask.id && styles.drawerItemActive]}
+                style={[styles.drawerItem, selectedMaskId === mask.id && styles.drawerItemActive, !mask.is_active && styles.drawerItemPaused]}
                 onPress={() => void chooseMailbox(mask.id)}
               >
-                <Text style={styles.drawerItemText} numberOfLines={1}>{mask.address}</Text>
-                {mask.unread_count > 0 ? <Text style={styles.drawerBadge}>{mask.unread_count}</Text> : null}
+                <Text style={[styles.drawerItemText, !mask.is_active && styles.drawerItemTextPaused]} numberOfLines={1}>{mask.address}</Text>
+                {!mask.is_active ? <Text style={styles.drawerPausedBadge}>paused</Text> : null}
+                {mask.is_active && mask.unread_count > 0 ? <Text style={styles.drawerBadge}>{mask.unread_count}</Text> : null}
               </TouchableOpacity>
             ))}
 
@@ -1585,6 +1712,52 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
     fontSize: 11,
     fontWeight: "700",
+  },
+  drawerItemPaused: {
+    opacity: 0.6,
+  },
+  drawerItemTextPaused: {
+    color: "#8a9ab2",
+  },
+  drawerPausedBadge: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#c49b00",
+    backgroundColor: "#fef9e0",
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    overflow: "hidden",
+  },
+  settingsRowPaused: {
+    opacity: 0.7,
+    backgroundColor: "#fafbfc",
+  },
+  settingsRowTitlePaused: {
+    color: "#8a9ab2",
+  },
+  pauseIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#d8e2f1",
+    backgroundColor: "#f4f8ff",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 4,
+  },
+  switchAuthBtn: {
+    alignItems: "center",
+    paddingVertical: 4,
+  },
+  switchAuthText: {
+    color: "#607089",
+    fontSize: 13,
+  },
+  switchAuthLink: {
+    color: "#0a66c2",
+    fontWeight: "600",
   },
   busy: {
     position: "absolute",

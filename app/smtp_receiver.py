@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import threading
 import uuid
 from email import message_from_bytes
@@ -7,9 +8,30 @@ from email.policy import default
 from aiosmtpd.controller import Controller
 from sqlalchemy import select
 
-from .config import MESSAGE_DIR
+from .config import FIREBASE_SERVICE_ACCOUNT_PATH, MESSAGE_DIR
 from .database import SessionLocal
-from .models import Mask, Message
+from .models import Mask, Message, PushToken
+
+logger = logging.getLogger(__name__)
+
+_firebase_initialized = False
+
+def _init_firebase():
+    global _firebase_initialized
+    if _firebase_initialized:
+        return True
+    if not FIREBASE_SERVICE_ACCOUNT_PATH:
+        return False
+    try:
+        import firebase_admin
+        from firebase_admin import credentials
+        cred = credentials.Certificate(FIREBASE_SERVICE_ACCOUNT_PATH)
+        firebase_admin.initialize_app(cred)
+        _firebase_initialized = True
+        return True
+    except Exception as exc:
+        logger.warning("Firebase init failed: %s", exc)
+        return False
 
 MESSAGE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -62,9 +84,37 @@ class MaskSMTPHandler:
                     raw_path=raw_path.as_posix(),
                 )
                 db.add(message)
+                db.flush()
+
+                push_tokens = db.scalars(select(PushToken).where(PushToken.user_id == mask.user_id)).all()
+                if push_tokens:
+                    _send_push_notifications(
+                        tokens=[pt.token for pt in push_tokens],
+                        title=f"New mail to {local_part}@{domain}",
+                        body=subject,
+                    )
             db.commit()
         finally:
             db.close()
+
+
+def _send_push_notifications(tokens: list, title: str, body: str):
+    if not tokens or not _init_firebase():
+        return
+    try:
+        from firebase_admin import messaging
+        for token in tokens:
+            try:
+                message = messaging.Message(
+                    notification=messaging.Notification(title=title, body=body),
+                    android=messaging.AndroidConfig(priority="high"),
+                    token=token,
+                )
+                messaging.send(message)
+            except Exception as exc:
+                logger.warning("FCM send failed for token %s…: %s", token[:12], exc)
+    except Exception as exc:
+        logger.warning("Push notification error: %s", exc)
 
 
 class SMTPServerRuntime:

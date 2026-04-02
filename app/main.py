@@ -44,7 +44,7 @@ from .config import (
     SMTP_PORT,
 )
 from .database import Base, SessionLocal, engine, get_db
-from .models import ApiToken, Domain, Mask, Message, User
+from .models import ApiToken, Domain, Mask, Message, PushToken, User
 from .smtp_receiver import SMTPServerRuntime
 
 try:
@@ -353,6 +353,21 @@ class ApiReplyRequest(BaseModel):
     reply_all: bool = False
 
 
+class ApiRegisterRequest(BaseModel):
+    email: str
+    password: str
+    invite_code: str = ""
+
+
+class ApiToggleMaskRequest(BaseModel):
+    is_active: bool
+
+
+class ApiPushTokenRequest(BaseModel):
+    token: str
+    platform: str = "fcm"
+
+
 def _hash_api_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
@@ -425,6 +440,18 @@ def require_api_user(
     return user
 
 
+def _ensure_mask_is_active_column():
+    db = SessionLocal()
+    try:
+        table_info = db.execute(text("PRAGMA table_info(masks)")).fetchall()
+        existing_columns = {row[1] for row in table_info}
+        if "is_active" not in existing_columns:
+            db.execute(text("ALTER TABLE masks ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"))
+            db.commit()
+    finally:
+        db.close()
+
+
 @app.on_event("startup")
 def startup_event():
     Base.metadata.create_all(bind=engine)
@@ -432,6 +459,7 @@ def startup_event():
     _ensure_message_is_outbound_column()
     _ensure_message_read_column()
     _ensure_user_timezone_column()
+    _ensure_mask_is_active_column()
     _ensure_default_domain()
     smtp_runtime.start()
 
@@ -596,6 +624,35 @@ def api_login(payload: ApiLoginRequest, db: Session = Depends(get_db)):
     }
 
 
+@app.post("/api/auth/register")
+def api_register(payload: ApiRegisterRequest, db: Session = Depends(get_db)):
+    email = payload.email.strip().lower()
+    registration_error = _can_register(email, payload.invite_code)
+    if registration_error:
+        raise HTTPException(status_code=403, detail=registration_error)
+
+    if len(payload.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
+
+    existing = db.scalar(select(User).where(User.email == email))
+    if existing:
+        raise HTTPException(status_code=409, detail="Email already registered.")
+
+    user = User(email=email, password_hash=hash_password(payload.password), timezone="UTC")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    token = _mint_api_token(user.id, db)
+    return {
+        "token": token,
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "timezone": "UTC",
+        },
+    }
+
+
 @app.post("/api/auth/logout")
 def api_logout(
     authorization: Optional[str] = Header(default=None),
@@ -661,6 +718,47 @@ def api_list_masks(user: User = Depends(require_api_user), db: Session = Depends
             for mask in masks
         ]
     }
+
+
+@app.patch("/api/masks/{mask_id}")
+def api_toggle_mask(
+    mask_id: int,
+    payload: ApiToggleMaskRequest,
+    user: User = Depends(require_api_user),
+    db: Session = Depends(get_db),
+):
+    mask = db.scalar(select(Mask).where(Mask.id == mask_id, Mask.user_id == user.id))
+    if not mask:
+        raise HTTPException(status_code=404, detail="Mask not found")
+    mask.is_active = payload.is_active
+    db.commit()
+    return {
+        "id": mask.id,
+        "address": f"{mask.local_part}@{mask.domain}",
+        "local_part": mask.local_part,
+        "domain": mask.domain,
+        "is_active": bool(mask.is_active),
+    }
+
+
+@app.post("/api/push-token")
+def api_register_push_token(
+    payload: ApiPushTokenRequest,
+    user: User = Depends(require_api_user),
+    db: Session = Depends(get_db),
+):
+    token = payload.token.strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="Token is required")
+    platform = payload.platform.strip() or "fcm"
+    existing = db.scalar(select(PushToken).where(PushToken.token == token))
+    if existing:
+        existing.user_id = user.id
+        existing.platform = platform
+    else:
+        db.add(PushToken(user_id=user.id, token=token, platform=platform))
+    db.commit()
+    return {"ok": True}
 
 
 @app.get("/api/domains")

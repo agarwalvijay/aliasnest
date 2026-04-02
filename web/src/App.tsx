@@ -87,6 +87,17 @@ const IconCopy = () => (
     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
   </svg>
 );
+const IconPause = () => (
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+    <rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none"/>
+    <rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none"/>
+  </svg>
+);
+const IconPlay = () => (
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" stroke="none">
+    <polygon points="5,3 19,12 5,21"/>
+  </svg>
+);
 const IconPlus = () => (
   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
     <line x1="12" y1="5" x2="12" y2="19"/>
@@ -101,7 +112,7 @@ const IconCheck = () => (
 // ── end icons ─────────────────────────────────────────────────────────────────
 
 type User = { id: number; email: string; timezone: string };
-type Mask = { id: number; address: string; local_part: string; domain: string; unread_count: number };
+type Mask = { id: number; address: string; local_part: string; domain: string; is_active: boolean; unread_count: number };
 type Domain = {
   id: number;
   name: string;
@@ -140,8 +151,13 @@ const TIMEZONE_OPTIONS = [
 
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem(TOKEN_KEY));
+  const [view, setView] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [regEmail, setRegEmail] = useState("");
+  const [regPassword, setRegPassword] = useState("");
+  const [regConfirm, setRegConfirm] = useState("");
+  const [regInvite, setRegInvite] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -323,8 +339,55 @@ export default function App() {
     await hydrate(token, selectedMaskId === maskId ? null : selectedMaskId);
   }
 
-  // ── Login ──────────────────────────────────────────────────────────────────
+  async function toggleMask(maskId: number, isActive: boolean) {
+    if (!token) return;
+    await apiRequest(`/api/masks/${maskId}`, "PATCH", token, { is_active: isActive });
+    setMasks((prev) => prev.map((m) => m.id === maskId ? { ...m, is_active: isActive } : m));
+  }
+
+  async function register() {
+    setError(null);
+    if (regPassword !== regConfirm) { setError("Passwords do not match."); return; }
+    setBusy(true);
+    try {
+      const payload = await apiRequest<{ token: string }>("/api/auth/register", "POST", undefined, {
+        email: regEmail.trim().toLowerCase(),
+        password: regPassword,
+        invite_code: regInvite.trim(),
+      });
+      localStorage.setItem(TOKEN_KEY, payload.token);
+      setToken(payload.token);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Registration failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // ── Login / Register ──────────────────────────────────────────────────────
   if (!token) {
+    if (view === "register") {
+      return (
+        <div className="login-shell">
+          <div className="login-card">
+            <div className="login-brand">
+              <div className="login-logo"><IconInbox /></div>
+              <h1>AliasNest</h1>
+              <p>Create an account</p>
+            </div>
+            <div className="login-body">
+              {error && <p className="login-error">{error}</p>}
+              <input value={regEmail} onChange={(e) => setRegEmail(e.target.value)} placeholder="Email address" type="email" autoFocus />
+              <input value={regPassword} onChange={(e) => setRegPassword(e.target.value)} placeholder="Password (min 8 chars)" type="password" />
+              <input value={regConfirm} onChange={(e) => setRegConfirm(e.target.value)} placeholder="Confirm password" type="password" />
+              <input value={regInvite} onChange={(e) => setRegInvite(e.target.value)} placeholder="Invite code (if required)" onKeyDown={(e) => e.key === "Enter" && void register()} />
+              <button onClick={() => void register()} disabled={busy}>{busy ? "Creating account…" : "Create account"}</button>
+              <p className="login-switch">Already have an account? <button className="link-btn" onClick={() => { setView("login"); setError(null); }}>Sign in</button></p>
+            </div>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="login-shell">
         <div className="login-card">
@@ -352,6 +415,7 @@ export default function App() {
             <button onClick={() => void login()} disabled={busy}>
               {busy ? "Signing in…" : "Sign in"}
             </button>
+            <p className="login-switch">New to AliasNest? <button className="link-btn" onClick={() => { setView("register"); setError(null); }}>Create account</button></p>
           </div>
         </div>
       </div>
@@ -481,7 +545,7 @@ export default function App() {
           {masks.length > 0 && <div className="sidebar-label">MASKS</div>}
 
           {masks.map((mask) => (
-            <div className="mask-item" key={mask.id}>
+            <div className={`mask-item${!mask.is_active ? " mask-paused" : ""}`} key={mask.id}>
               <button
                 className={`mask-btn${selectedMaskId === mask.id ? " active" : ""}`}
                 onClick={() => {
@@ -492,7 +556,15 @@ export default function App() {
                 }}
               >
                 <span className="mask-addr-text">{mask.address}</span>
-                {mask.unread_count > 0 && <span className="sidebar-badge">{mask.unread_count}</span>}
+                {!mask.is_active && <span className="mask-paused-badge">paused</span>}
+                {mask.is_active && mask.unread_count > 0 && <span className="sidebar-badge">{mask.unread_count}</span>}
+              </button>
+              <button
+                className="mask-del-btn"
+                onClick={() => void toggleMask(mask.id, !mask.is_active)}
+                title={mask.is_active ? "Pause mask" : "Resume mask"}
+              >
+                {mask.is_active ? <IconPause /> : <IconPlay />}
               </button>
               <button className="mask-del-btn" onClick={() => void deleteMask(mask.id)} title="Delete mask">
                 <IconTrash />

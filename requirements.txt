@@ -6,3 +6,4 @@ python-multipart==0.0.9
 aiosmtpd==1.4.6
 itsdangerous==2.2.0
 dnspython==2.6.1
+firebase-admin==6.5.0

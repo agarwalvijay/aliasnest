@@ -16,8 +16,12 @@
       "bundleIdentifier": "com.aliasnest.app"
     },
     "android": {
-      "package": "com.aliasnest.app"
+      "package": "com.aliasnest.aliasnest",
+      "googleServicesFile": "./google-services.json"
     },
+    "plugins": [
+      "expo-notifications"
+    ],
     "extra": {
       "apiBaseUrl": "http://localhost:8080",
       "eas": {

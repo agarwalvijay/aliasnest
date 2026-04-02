@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "325813315330",
+    "project_id": "aliasnest-9882a",
+    "storage_bucket": "aliasnest-9882a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:325813315330:android:d4521fdd01a1e65473441b",
+        "android_client_info": {
+          "package_name": "com.aliasnest.aliasnest"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDBGSJCOGf3VwepL4xQYy8-h359pQEK6BI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

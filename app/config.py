@@ -30,3 +30,4 @@ OUTBOUND_ALLOWED_DOMAINS = {
     for domain in os.getenv("OUTBOUND_ALLOWED_DOMAINS", "").split(",")
     if domain.strip()
 }
+FIREBASE_SERVICE_ACCOUNT_PATH = os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH", "").strip()

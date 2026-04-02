@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 app/data/app.db
 app/data/messages/*.eml
+app/data/*.json
 .env
 .venv/
 mobile/.expo/

@@ -79,3 +79,15 @@ class ApiToken(Base):
     is_revoked: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
     user = relationship("User", back_populates="api_tokens")
+
+
+class PushToken(Base):
+    __tablename__ = "push_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    token: Mapped[str] = mapped_column(String(512), unique=True, index=True)
+    platform: Mapped[str] = mapped_column(String(16), default="fcm")  # "fcm" | "apns"
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")
