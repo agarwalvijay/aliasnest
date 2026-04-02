@@ -253,15 +253,13 @@ export default function App() {
 
   async function toggleUnread() {
     if (!token || !selectedMessage || selectedMessage.is_outbound) return;
-    const markingUnread = selectedMessage.is_read;
-    await apiRequest(`/api/messages/${selectedMessage.id}/${markingUnread ? "mark-unread" : "mark-read"}`, "POST", token);
-    if (markingUnread) {
-      // Close the read pane so the user must re-click to read it,
-      // which triggers openMessage → mark-read → count decrement.
-      setSelectedMessage(null);
-    } else {
-      const refreshed = await apiRequest<MessageDetail>(`/api/messages/${selectedMessage.id}`, "GET", token);
-      setSelectedMessage(refreshed);
+    const nextRead = !selectedMessage.is_read;
+    await apiRequest(`/api/messages/${selectedMessage.id}/${nextRead ? "mark-read" : "mark-unread"}`, "POST", token);
+    const refreshed = await apiRequest<MessageDetail>(`/api/messages/${selectedMessage.id}`, "GET", token);
+    setSelectedMessage(refreshed);
+    if (nextRead) {
+      // Marking as read: optimistically decrement the sidebar count
+      setMasks((prev) => prev.map((m) => m.id === refreshed.mask_id ? { ...m, unread_count: Math.max(0, m.unread_count - 1) } : m));
     }
     await hydrate(token, selectedMaskId);
   }
