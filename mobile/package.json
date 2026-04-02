@@ -16,7 +16,9 @@
     "react-native": "0.81.5"
   },
   "devDependencies": {
+    "@babel/core": "^7.26.0",
     "@types/react": "~19.1.10",
+    "babel-preset-expo": "~54.0.10",
     "typescript": "~5.9.2"
   }
 }
