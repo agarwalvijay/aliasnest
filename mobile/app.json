@@ -3,9 +3,11 @@
     "name": "AliasNest",
     "slug": "aliasnest",
     "version": "0.1.0",
+    "icon": "./assets/icon.png",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -17,7 +19,10 @@
       "package": "com.aliasnest.app"
     },
     "extra": {
-      "apiBaseUrl": "http://localhost:8080"
+      "apiBaseUrl": "http://localhost:8080",
+      "eas": {
+        "projectId": "c9bb0a73-fa65-4829-b8eb-4345f9439fdd"
+      }
     }
   }
 }
