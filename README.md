@@ -158,18 +158,56 @@ MX_TARGET_HOST=mx.aliasnest.com
 SIGNUP_OPEN=false
 ```
 
-### 3) Install systemd services
+### 3) Run API with PM2 (recommended for your setup)
 
 ```bash
-sudo cp deploy/aliasnest.service /etc/systemd/system/
-sudo cp deploy/aliasnest-port25-redirect.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now aliasnest.service
-sudo systemctl enable --now aliasnest-port25-redirect.service
-sudo systemctl status aliasnest.service
+cd /home/vagarwal/aliasnest
+pm2 start deploy/ecosystem.config.cjs
+pm2 save
 ```
 
-### 4) Nginx (API + web app)
+`deploy/run-api.sh` is used by PM2 and loads `/home/vagarwal/aliasnest/.env` before launching uvicorn.
+
+Enable PM2 on reboot (one time):
+
+```bash
+pm2 startup
+# run the command PM2 prints (with sudo), then:
+pm2 save
+```
+
+View logs/status:
+
+```bash
+pm2 status
+pm2 logs aliasnest-api
+```
+
+Update/restart after code change:
+
+```bash
+cd /home/vagarwal/aliasnest
+git pull
+source .venv/bin/activate
+pip install -r requirements.txt
+pm2 restart aliasnest-api --update-env
+```
+
+### 4) Port 25 -> 2525 redirect (if using unprivileged SMTP listener)
+
+```bash
+sudo /home/vagarwal/aliasnest/deploy/aliasnest-port25-redirect.sh start
+```
+
+Optional persistence across reboot:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y iptables-persistent
+sudo netfilter-persistent save
+```
+
+### 5) Nginx (API + web app)
 
 Example Nginx site:
 
