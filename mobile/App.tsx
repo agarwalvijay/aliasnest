@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   BackHandler,
   FlatList,
   KeyboardAvoidingView,
@@ -133,6 +134,60 @@ function shortTime(isoUtc: string): string {
   }
   return date.toLocaleDateString([], { month: "short", day: "numeric" });
 }
+
+const SWIPE_THRESHOLD = 90;
+
+function SwipeableRow({ onDelete, children }: { onDelete: () => void; children: React.ReactNode }) {
+  const translateX = useRef(new Animated.Value(0)).current;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) =>
+        Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+      onPanResponderMove: (_, g) => translateX.setValue(g.dx),
+      onPanResponderRelease: (_, g) => {
+        if (Math.abs(g.dx) > SWIPE_THRESHOLD) {
+          Animated.timing(translateX, {
+            toValue: g.dx > 0 ? 600 : -600,
+            duration: 180,
+            useNativeDriver: true,
+          }).start(() => {
+            translateX.setValue(0);
+            onDelete();
+          });
+        } else {
+          Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+        }
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+      },
+    }),
+  ).current;
+
+  return (
+    <View style={{ overflow: "hidden" }}>
+      <View style={swipeStyles.deleteBackground}>
+        <MaterialCommunityIcons name="trash-can-outline" size={24} color="#fff" />
+        <MaterialCommunityIcons name="trash-can-outline" size={24} color="#fff" />
+      </View>
+      <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
+        {children}
+      </Animated.View>
+    </View>
+  );
+}
+
+const swipeStyles = StyleSheet.create({
+  deleteBackground: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#c4314b",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 24,
+  },
+});
 
 export default function App() {
   const topInset = Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
@@ -813,23 +868,30 @@ export default function App() {
           renderItem={({ item }) => {
             const isUnread = !item.is_outbound && !item.is_read;
             return (
-              <TouchableOpacity style={[styles.messageRow, isUnread && styles.messageUnread]} onPress={() => void openMessage(item.id)}>
-              <View style={styles.rowMain}>
-                <View style={[styles.avatarCircle, { backgroundColor: avatarColor(senderLabel(item)) }]}>
-                  <Text style={styles.avatarText}>{initialsFromSender(senderLabel(item))}</Text>
-                </View>
-                <View style={styles.rowContent}>
-                  <View style={styles.messageTopLine}>
-                    <Text style={[styles.senderText, isUnread && styles.senderTextUnread]} numberOfLines={1}>{senderLabel(item)}</Text>
-                    {isUnread ? <View style={styles.unreadDot} /> : null}
-                    <Text style={styles.timeText}>{item.received_at_local}</Text>
+              <SwipeableRow onDelete={() => {
+                if (!token) return;
+                apiRequest(`/api/messages/${item.id}`, "DELETE", token)
+                  .then(() => setMessages((prev) => prev.filter((m) => m.id !== item.id)))
+                  .catch(() => void refreshAccount(token, selectedMaskId));
+              }}>
+                <TouchableOpacity style={[styles.messageRow, isUnread && styles.messageUnread]} onPress={() => void openMessage(item.id)}>
+                  <View style={styles.rowMain}>
+                    <View style={[styles.avatarCircle, { backgroundColor: avatarColor(senderLabel(item)) }]}>
+                      <Text style={styles.avatarText}>{initialsFromSender(senderLabel(item))}</Text>
+                    </View>
+                    <View style={styles.rowContent}>
+                      <View style={styles.messageTopLine}>
+                        <Text style={[styles.senderText, isUnread && styles.senderTextUnread]} numberOfLines={1}>{senderLabel(item)}</Text>
+                        {isUnread ? <View style={styles.unreadDot} /> : null}
+                        <Text style={styles.timeText}>{item.received_at_local}</Text>
+                      </View>
+                      <Text style={[styles.subjectText, isUnread && styles.subjectTextUnread]} numberOfLines={1}>{item.subject}</Text>
+                      {item.preview ? <Text style={styles.previewText} numberOfLines={1}>{item.preview}</Text> : null}
+                      <Text style={styles.aliasText} numberOfLines={1}>{item.mask_address}</Text>
+                    </View>
                   </View>
-                  <Text style={[styles.subjectText, isUnread && styles.subjectTextUnread]} numberOfLines={1}>{item.subject}</Text>
-                  {item.preview ? <Text style={styles.previewText} numberOfLines={1}>{item.preview}</Text> : null}
-                  <Text style={styles.aliasText} numberOfLines={1}>{item.mask_address}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
+                </TouchableOpacity>
+              </SwipeableRow>
             );
           }}
         />
