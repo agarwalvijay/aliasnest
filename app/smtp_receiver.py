@@ -21,6 +21,7 @@ def _init_firebase():
     if _firebase_initialized:
         return True
     if not FIREBASE_SERVICE_ACCOUNT_PATH:
+        logger.warning("Firebase not configured: FIREBASE_SERVICE_ACCOUNT_PATH is not set")
         return False
     try:
         import firebase_admin
@@ -28,6 +29,7 @@ def _init_firebase():
         cred = credentials.Certificate(FIREBASE_SERVICE_ACCOUNT_PATH)
         firebase_admin.initialize_app(cred)
         _firebase_initialized = True
+        logger.info("Firebase initialized OK")
         return True
     except Exception as exc:
         logger.warning("Firebase init failed: %s", exc)
@@ -99,6 +101,7 @@ class MaskSMTPHandler:
 
 
 def _send_push_notifications(tokens: list, title: str, body: str):
+    logger.info("Push: sending to %d token(s)", len(tokens))
     if not tokens or not _init_firebase():
         return
     try:
@@ -110,7 +113,8 @@ def _send_push_notifications(tokens: list, title: str, body: str):
                     android=messaging.AndroidConfig(priority="high"),
                     token=token,
                 )
-                messaging.send(message)
+                result = messaging.send(message)
+                logger.info("FCM sent OK: %s", result)
             except Exception as exc:
                 logger.warning("FCM send failed for token %s…: %s", token[:12], exc)
     except Exception as exc:
