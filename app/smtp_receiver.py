@@ -90,17 +90,28 @@ class MaskSMTPHandler:
 
                 push_tokens = db.scalars(select(PushToken).where(PushToken.user_id == mask.user_id)).all()
                 if push_tokens:
+                    from sqlalchemy import func as sqlfunc
+                    unread = db.scalar(
+                        sqlfunc.count(Message.id).select().where(
+                            Message.mask_id.in_(
+                                select(Mask.id).where(Mask.user_id == mask.user_id)
+                            ),
+                            Message.is_read.is_(False),
+                            Message.is_outbound.is_(False),
+                        )
+                    ) or 1
                     _send_push_notifications(
                         tokens=[pt.token for pt in push_tokens],
                         title=f"New mail to {local_part}@{domain}",
                         body=subject,
+                        badge=unread,
                     )
             db.commit()
         finally:
             db.close()
 
 
-def _send_push_notifications(tokens: list, title: str, body: str):
+def _send_push_notifications(tokens: list, title: str, body: str, badge: int = 1):
     logger.info("Push: sending to %d token(s)", len(tokens))
     if not tokens or not _init_firebase():
         return
@@ -112,6 +123,9 @@ def _send_push_notifications(tokens: list, title: str, body: str):
                 message = messaging.Message(
                     notification=messaging.Notification(title=title, body=body),
                     android=messaging.AndroidConfig(priority="high"),
+                    apns=messaging.APNSConfig(
+                        payload=messaging.APNSPayload(aps=messaging.Aps(badge=badge))
+                    ),
                     token=token,
                 )
                 result = messaging.send(message)

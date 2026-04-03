@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  AppState,
   BackHandler,
   FlatList,
   KeyboardAvoidingView,
@@ -301,6 +302,21 @@ export default function App() {
     void refreshAccount(token, selectedMaskId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  // Auto-refresh: re-fetch when app comes to foreground (e.g. after tapping a notification)
+  // and poll every 60s while active. Clear badge whenever app becomes active.
+  useEffect(() => {
+    if (!token) return;
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        void Notifications.setBadgeCountAsync(0);
+        void refreshAccount(token, selectedMaskId);
+      }
+    });
+    const poll = setInterval(() => void refreshAccount(token, selectedMaskId), 60_000);
+    return () => { sub.remove(); clearInterval(poll); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, selectedMaskId]);
 
   async function refreshAccount(activeToken: string, preferredMaskId: number | null) {
     setBusy(true);

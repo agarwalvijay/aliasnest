@@ -192,6 +192,15 @@ export default function App() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  // Auto-refresh: poll every 30s, and refresh immediately when tab becomes visible
+  useEffect(() => {
+    if (!token) return;
+    const poll = setInterval(() => void hydrate(token, selectedMaskId), 30_000);
+    const onVisible = () => { if (document.visibilityState === "visible") void hydrate(token, selectedMaskId); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(poll); document.removeEventListener("visibilitychange", onVisible); };
+  }, [token, selectedMaskId]);
+
   async function hydrate(activeToken: string, preferredMask: number | null) {
     setBusy(true);
     setError(null);
