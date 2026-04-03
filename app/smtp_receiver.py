@@ -105,7 +105,8 @@ def _send_push_notifications(tokens: list, title: str, body: str):
     if not tokens or not _init_firebase():
         return
     try:
-        from firebase_admin import messaging
+        from firebase_admin import messaging, exceptions
+        stale_tokens = []
         for token in tokens:
             try:
                 message = messaging.Message(
@@ -115,10 +116,29 @@ def _send_push_notifications(tokens: list, title: str, body: str):
                 )
                 result = messaging.send(message)
                 logger.info("FCM sent OK: %s", result)
+            except exceptions.NotFoundError:
+                logger.info("FCM token stale, removing: %s…", token[:12])
+                stale_tokens.append(token)
             except Exception as exc:
                 logger.warning("FCM send failed for token %s…: %s", token[:12], exc)
+        if stale_tokens:
+            _remove_stale_tokens(stale_tokens)
     except Exception as exc:
         logger.warning("Push notification error: %s", exc)
+
+
+def _remove_stale_tokens(tokens: list):
+    db = SessionLocal()
+    try:
+        for token in tokens:
+            row = db.scalar(select(PushToken).where(PushToken.token == token))
+            if row:
+                db.delete(row)
+        db.commit()
+    except Exception as exc:
+        logger.warning("Failed to remove stale tokens: %s", exc)
+    finally:
+        db.close()
 
 
 class SMTPServerRuntime:
