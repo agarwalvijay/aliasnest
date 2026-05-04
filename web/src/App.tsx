@@ -63,6 +63,12 @@ const IconClose = () => (
     <line x1="6" y1="6" x2="18" y2="18"/>
   </svg>
 );
+const IconArrowLeft = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="19" y1="12" x2="5" y2="12"/>
+    <polyline points="12 19 5 12 12 5"/>
+  </svg>
+);
 const IconReply = () => (
   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M10 7L4 12L10 17"/>
@@ -669,7 +675,7 @@ export default function App() {
           )}
         </aside>
 
-        <div className="main-area">
+        <div className={`main-area${selectedMessage ? " reading" : ""}`}>
           {/* Message list */}
           <section className="list-pane">
             <div className="list-header">
@@ -723,6 +729,9 @@ export default function App() {
             {selectedMessage ? (
               <>
                 <div className="read-toolbar">
+                  <button className="icon-btn" title="Back to list" onClick={() => setSelectedMessage(null)}>
+                    <IconArrowLeft />
+                  </button>
                   {!selectedMessage.is_outbound && (
                     <>
                       <button className="icon-btn" title="Reply" onClick={() => openReply("reply")}>

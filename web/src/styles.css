@@ -540,6 +540,15 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   border-left: 1px solid #e8eaed;
 }
 
+/* When reading a message, hide the list pane so the body fills the area. */
+.main-area.reading {
+  grid-template-columns: 1fr;
+}
+
+.main-area.reading .list-pane {
+  display: none;
+}
+
 /* ── Message list pane ────────────────────────────────────────────────────── */
 .list-pane {
   display: flex;
@@ -739,6 +748,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 
 .read-content {
   padding: 24px 32px 16px;
+  max-width: 1200px;
 }
 
 .read-subject {
@@ -809,7 +819,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 
 .read-body-wrap {
-  padding: 0 32px 24px;
+  padding: 0 16px 24px;
 }
 
 .read-body {
