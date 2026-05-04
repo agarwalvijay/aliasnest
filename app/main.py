@@ -460,18 +460,24 @@ def require_api_user(
 
 
 def _backfill_message_metadata():
-    """One-time: re-derive From: header (was envelope MAIL FROM) and text_preview
-    (was empty for HTML-only emails) from the stored .eml. Idempotent via PRAGMA
-    user_version."""
+    """Re-derive From: header and text_preview from the stored .eml for any
+    rows missing them. The From: backfill is one-shot (PRAGMA user_version >= 1
+    skips it). The preview backfill always runs for any row whose text_preview
+    is empty so improvements to extraction logic apply on next startup."""
     from .smtp_receiver import _extract_preview
 
     db = SessionLocal()
     try:
         flag_row = db.execute(text("PRAGMA user_version")).fetchone()
         current_version = int(flag_row[0]) if flag_row else 0
-        if current_version >= 2:
-            return
-        messages = db.scalars(select(Message)).all()
+        do_from_backfill = current_version < 1
+
+        messages = db.scalars(
+            select(Message).where(
+                or_(Message.text_preview.is_(None), Message.text_preview == "")
+            )
+        ).all() if not do_from_backfill else db.scalars(select(Message)).all()
+
         from_updated = 0
         preview_updated = 0
         for message in messages:
@@ -480,11 +486,12 @@ def _backfill_message_metadata():
                 if not raw_path.exists():
                     continue
                 raw_bytes = raw_path.read_bytes()
-                parsed = BytesParser(policy=policy.default).parsebytes(raw_bytes)
-                header_from = (parsed.get("From") or "").strip()
-                if header_from and header_from != (message.from_addr or "").strip():
-                    message.from_addr = header_from[:500]
-                    from_updated += 1
+                if do_from_backfill:
+                    parsed = BytesParser(policy=policy.default).parsebytes(raw_bytes)
+                    header_from = (parsed.get("From") or "").strip()
+                    if header_from and header_from != (message.from_addr or "").strip():
+                        message.from_addr = header_from[:500]
+                        from_updated += 1
                 if not (message.text_preview or "").strip():
                     snippet = _extract_preview(raw_bytes)
                     if snippet:
@@ -492,10 +499,11 @@ def _backfill_message_metadata():
                         preview_updated += 1
             except Exception:
                 continue
-        db.execute(text("PRAGMA user_version = 2"))
+        if do_from_backfill:
+            db.execute(text("PRAGMA user_version = 1"))
         db.commit()
         if from_updated or preview_updated:
-            logger.info("Backfill complete — From: %d, preview: %d", from_updated, preview_updated)
+            logger.info("Backfill — From: %d, preview: %d", from_updated, preview_updated)
     finally:
         db.close()
 

@@ -671,12 +671,12 @@ export default function App() {
                     <div className="msg-info">
                       <div className="msg-row-line msg-row-line-top">
                         <span className="msg-sender" title={senderAddr}>{senderText}</span>
+                        {!selectedMaskId && msg.mask_address && (
+                          <span className="msg-mask-tag" title={msg.mask_address}>{msg.mask_address}</span>
+                        )}
                         <span className="msg-time">{shortTime(msg.received_at_utc, msg.received_at_local)}</span>
                       </div>
                       <div className="msg-row-line">
-                        {!selectedMaskId && msg.mask_address && (
-                          <span className="msg-mask-tag">{msg.mask_address}</span>
-                        )}
                         <span className="msg-subject">{msg.subject || "(no subject)"}</span>
                       </div>
                       <div className="msg-row-line">
