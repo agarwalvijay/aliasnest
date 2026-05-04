@@ -459,6 +459,38 @@ def require_api_user(
     return user
 
 
+def _backfill_message_from_addr():
+    """One-time: replace stored envelope MAIL FROM (bounce/return-path) with
+    the From: header value from the .eml, so the inbox shows the real sender.
+    Idempotent: only updates rows where the .eml header differs from stored value."""
+    db = SessionLocal()
+    try:
+        flag_row = db.execute(text("PRAGMA user_version")).fetchone()
+        current_version = int(flag_row[0]) if flag_row else 0
+        if current_version >= 1:
+            return
+        messages = db.scalars(select(Message)).all()
+        updated = 0
+        for message in messages:
+            try:
+                raw_path = Path(message.raw_path)
+                if not raw_path.exists():
+                    continue
+                parsed = BytesParser(policy=policy.default).parsebytes(raw_path.read_bytes())
+                header_from = (parsed.get("From") or "").strip()
+                if header_from and header_from != (message.from_addr or "").strip():
+                    message.from_addr = header_from[:500]
+                    updated += 1
+            except Exception:
+                continue
+        db.execute(text("PRAGMA user_version = 1"))
+        db.commit()
+        if updated:
+            logger.info("Backfilled From: header for %d messages", updated)
+    finally:
+        db.close()
+
+
 def _ensure_mask_is_active_column():
     db = SessionLocal()
     try:
@@ -480,6 +512,7 @@ def startup_event():
     _ensure_user_timezone_column()
     _ensure_mask_is_active_column()
     _ensure_default_domain()
+    _backfill_message_from_addr()
     smtp_runtime.start()
 
 

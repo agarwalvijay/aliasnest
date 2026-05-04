@@ -248,6 +248,7 @@ export default function App() {
   const [newMaskDomain, setNewMaskDomain] = useState("");
   const [replyBody, setReplyBody] = useState("");
   const [replyMode, setReplyMode] = useState<"reply" | "reply_all">("reply");
+  const [showReplyModal, setShowReplyModal] = useState(false);
 
   const totalUnread = useMemo(() => masks.reduce((s, m) => s + m.unread_count, 0), [masks]);
   const verifiedDomainNames = useMemo(() => domains.filter((d) => d.can_use_for_mask).map((d) => d.name), [domains]);
@@ -260,7 +261,9 @@ export default function App() {
 
   // Close settings on Escape
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setShowSettings(false); };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setShowSettings(false); setShowReplyModal(false); }
+    };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
@@ -342,6 +345,7 @@ export default function App() {
     setSelectedMessage(detail);
     setReplyBody("");
     setReplyMode("reply");
+    setShowReplyModal(false);
     if (!detail.is_outbound && !detail.is_read) {
       await apiRequest(`/api/messages/${detail.id}/mark-read`, "POST", token);
       setMessages((prev) => prev.map((m) => (m.id === detail.id ? { ...m, is_read: true } : m)));
@@ -375,7 +379,13 @@ export default function App() {
     if (!body) return;
     await apiRequest(`/api/messages/${selectedMessage.id}/reply`, "POST", token, { body, reply_all: replyMode === "reply_all" });
     setReplyBody("");
+    setShowReplyModal(false);
     await hydrate(token, selectedMaskId);
+  }
+
+  function openReply(mode: "reply" | "reply_all") {
+    setReplyMode(mode);
+    setShowReplyModal(true);
   }
 
   async function copyToClipboard(value: string | null | undefined) {
@@ -686,15 +696,21 @@ export default function App() {
                       {senderInitial(senderAddr)}
                     </div>
                     <div className="msg-info">
-                      <span className="msg-sender" title={senderAddr}>{senderText}</span>
-                      <span className="msg-subject-line">
+                      <div className="msg-row-line msg-row-line-top">
+                        <span className="msg-sender" title={senderAddr}>{senderText}</span>
+                        <span className="msg-time">{shortTime(msg.received_at_utc, msg.received_at_local)}</span>
+                      </div>
+                      <div className="msg-row-line">
                         {!selectedMaskId && msg.mask_address && (
                           <span className="msg-mask-tag">{msg.mask_address}</span>
                         )}
                         <span className="msg-subject">{msg.subject || "(no subject)"}</span>
-                        {msg.preview && <span className="msg-preview"> — {msg.preview}</span>}
-                      </span>
-                      <span className="msg-time">{shortTime(msg.received_at_utc, msg.received_at_local)}</span>
+                      </div>
+                      {msg.preview && (
+                        <div className="msg-row-line">
+                          <span className="msg-preview">{msg.preview}</span>
+                        </div>
+                      )}
                     </div>
                   </button>
                 );
@@ -709,10 +725,10 @@ export default function App() {
                 <div className="read-toolbar">
                   {!selectedMessage.is_outbound && (
                     <>
-                      <button className={`icon-btn${replyMode === "reply" ? " active" : ""}`} title="Reply" onClick={() => setReplyMode("reply")}>
+                      <button className="icon-btn" title="Reply" onClick={() => openReply("reply")}>
                         <IconReply />
                       </button>
-                      <button className={`icon-btn${replyMode === "reply_all" ? " active" : ""}`} title="Reply all" onClick={() => setReplyMode("reply_all")}>
+                      <button className="icon-btn" title="Reply all" onClick={() => openReply("reply_all")}>
                         <IconReplyAll />
                       </button>
                       <button className="icon-btn" title={selectedMessage.is_read ? "Mark unread" : "Mark read"} onClick={() => void toggleUnread()}>
@@ -751,21 +767,6 @@ export default function App() {
                     : <pre className="read-body">{selectedMessage.body}</pre>}
                 </div>
 
-                {!selectedMessage.is_outbound && (
-                  <div className="reply-box">
-                    <textarea
-                      value={replyBody}
-                      onChange={(e) => setReplyBody(e.target.value)}
-                      placeholder={replyMode === "reply_all" ? "Reply to all…" : `Reply to ${displayName(selectedMessage.from)}…`}
-                    />
-                    <div className="reply-actions">
-                      <span className="reply-mode-toggle" />
-                      <button className="send-btn" onClick={() => void sendReply()} disabled={!replyBody.trim()}>
-                        Send
-                      </button>
-                    </div>
-                  </div>
-                )}
               </>
             ) : (
               <div className="read-empty">
@@ -776,6 +777,39 @@ export default function App() {
           </section>
         </div>
       </main>
+
+      {/* Reply modal */}
+      {showReplyModal && selectedMessage && (
+        <>
+          <div className="settings-backdrop" onClick={() => setShowReplyModal(false)} />
+          <div className="reply-modal">
+            <div className="reply-modal-head">
+              <div className="reply-modal-title">
+                <span>{replyMode === "reply_all" ? "Reply all" : "Reply"}</span>
+                <span className="reply-modal-recipient">to {displayName(selectedMessage.from)}</span>
+              </div>
+              <button className="icon-btn" onClick={() => setShowReplyModal(false)} title="Close">
+                <IconClose />
+              </button>
+            </div>
+            <textarea
+              autoFocus
+              className="reply-modal-textarea"
+              value={replyBody}
+              onChange={(e) => setReplyBody(e.target.value)}
+              placeholder={replyMode === "reply_all" ? "Reply to all…" : `Reply to ${displayName(selectedMessage.from)}…`}
+            />
+            <div className="reply-modal-actions">
+              <button className="link-btn" onClick={() => setReplyMode(replyMode === "reply" ? "reply_all" : "reply")}>
+                {replyMode === "reply" ? "Switch to reply all" : "Switch to reply"}
+              </button>
+              <button className="send-btn" onClick={() => void sendReply()} disabled={!replyBody.trim()}>
+                Send
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

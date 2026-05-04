@@ -75,10 +75,12 @@ class MaskSMTPHandler:
 
                 parsed = message_from_bytes(envelope.content, policy=default)
                 subject = (parsed.get("Subject") or "(No Subject)")[:500]
+                header_from = (parsed.get("From") or "").strip()
+                from_value = header_from or (envelope.mail_from or "")
 
                 message = Message(
                     mask_id=mask.id,
-                    from_addr=(envelope.mail_from or "")[:500],
+                    from_addr=from_value[:500],
                     to_addr=recipient[:500],
                     subject=subject,
                     text_preview=_extract_preview(envelope.content),
