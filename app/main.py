@@ -398,6 +398,29 @@ def _mint_api_token(user_id: int, db: Session) -> str:
     return plain
 
 
+def _ensure_preview(messages: list, db: Session) -> None:
+    """Self-heal: fill text_preview from the stored .eml for any message that
+    has none. Extraction logic comes from smtp_receiver._extract_preview."""
+    from .smtp_receiver import _extract_preview
+
+    dirty = False
+    for message in messages:
+        if (message.text_preview or "").strip():
+            continue
+        try:
+            raw_path = Path(message.raw_path)
+            if not raw_path.exists():
+                continue
+            snippet = _extract_preview(raw_path.read_bytes())
+            if snippet:
+                message.text_preview = snippet
+                dirty = True
+        except Exception:
+            continue
+    if dirty:
+        db.commit()
+
+
 def _message_to_api_payload(message: Message, tz_name: str) -> dict:
     return {
         "id": message.id,
@@ -1017,6 +1040,7 @@ def api_list_mask_messages(
         .order_by(Message.received_at.desc())
         .limit(safe_limit)
     ).all()
+    _ensure_preview(messages, db)
     tz_name = _safe_tz_name(user.timezone)
     return {
         "mask": {

@@ -76,8 +76,11 @@ def _extract_preview(raw_bytes: bytes) -> str:
             elif ctype == "text/html":
                 html = content.strip()
         snippet = plain or _strip_html_to_text(html)
+        if not snippet:
+            logger.info("preview empty: plain=%d html=%d", len(plain), len(html))
         return snippet[:2000]
-    except Exception:
+    except Exception as exc:
+        logger.warning("preview extract failed: %s", exc)
         return ""
 
 
