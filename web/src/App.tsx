@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiRequest } from "./api";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -126,11 +126,8 @@ const IconCheck = () => (
 );
 // ── end icons ─────────────────────────────────────────────────────────────────
 
-// Sandboxed iframe renderer for HTML email bodies. Auto-resizes to content.
+// Sandboxed iframe renderer for HTML email bodies. Fills container, scrolls internally.
 function HtmlBody({ html }: { html: string }) {
-  const ref = useRef<HTMLIFrameElement>(null);
-  const [height, setHeight] = useState(120);
-
   const srcDoc = useMemo(() => {
     const sanitizedHtml = html
       .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
@@ -139,7 +136,7 @@ function HtmlBody({ html }: { html: string }) {
       .replace(/\son\w+\s*=\s*[^\s>]*/gi, "");
     return `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>
       html,body{margin:0;padding:0;background:#fff;color:#202124;font-family:"Google Sans","Inter",system-ui,-apple-system,Roboto,sans-serif;font-size:14px;line-height:1.55;word-wrap:break-word;overflow-wrap:anywhere;}
-      body{padding:0;}
+      body{padding:8px 16px;}
       img{max-width:100%;height:auto;}
       table{max-width:100%;border-collapse:collapse;}
       a{color:#1a73e8;}
@@ -150,35 +147,11 @@ function HtmlBody({ html }: { html: string }) {
     </style></head><body>${sanitizedHtml}</body></html>`;
   }, [html]);
 
-  useEffect(() => {
-    const iframe = ref.current;
-    if (!iframe) return;
-    const resize = () => {
-      try {
-        const doc = iframe.contentDocument;
-        if (!doc) return;
-        const next = Math.max(doc.documentElement.scrollHeight, doc.body?.scrollHeight || 0);
-        if (next > 0) setHeight(next + 4);
-      } catch { /* cross-origin guard */ }
-    };
-    const onLoad = () => {
-      resize();
-      // images often load after the load event
-      const imgs = iframe.contentDocument?.images;
-      if (imgs) Array.from(imgs).forEach((img) => img.addEventListener("load", resize));
-      window.setTimeout(resize, 250);
-    };
-    iframe.addEventListener("load", onLoad);
-    return () => iframe.removeEventListener("load", onLoad);
-  }, [srcDoc]);
-
   return (
     <iframe
-      ref={ref}
       className="read-body-html"
       sandbox="allow-popups allow-popups-to-escape-sandbox"
       srcDoc={srcDoc}
-      style={{ height: `${height}px` }}
       title="message-body"
     />
   );
@@ -706,11 +679,9 @@ export default function App() {
                         )}
                         <span className="msg-subject">{msg.subject || "(no subject)"}</span>
                       </div>
-                      {msg.preview && (
-                        <div className="msg-row-line">
-                          <span className="msg-preview">{msg.preview}</span>
-                        </div>
-                      )}
+                      <div className="msg-row-line">
+                        <span className="msg-preview">{msg.preview || " "}</span>
+                      </div>
                     </div>
                   </button>
                 );

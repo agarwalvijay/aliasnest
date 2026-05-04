@@ -682,6 +682,9 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: 400 !important;
+  min-height: 18px;
+  display: block;
+  width: 100%;
 }
 
 .msg-mask-tag {
@@ -707,9 +710,9 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 /* ── Read pane ────────────────────────────────────────────────────────────── */
 .read-pane {
   background: #fff;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .read-empty {
@@ -738,8 +741,9 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 .read-toolbar-spacer { flex: 1; }
 
 .read-content {
-  padding: 24px 32px 16px;
+  padding: 24px 32px 12px;
   max-width: 1200px;
+  flex-shrink: 0;
 }
 
 .read-subject {
@@ -810,7 +814,10 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 
 .read-body-wrap {
-  padding: 0 16px 24px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  padding: 0;
 }
 
 .read-body {
@@ -821,10 +828,15 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   line-height: 1.6;
   color: #202124;
   margin: 0;
+  padding: 0 32px 24px;
+  flex: 1;
+  overflow-y: auto;
 }
 
 .read-body-html {
+  flex: 1;
   width: 100%;
+  height: 100%;
   border: none;
   display: block;
   background: #fff;
