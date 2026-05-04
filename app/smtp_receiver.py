@@ -1,5 +1,7 @@
 import asyncio
+import html as html_lib
 import logging
+import re
 import threading
 import uuid
 from email import message_from_bytes
@@ -38,20 +40,45 @@ def _init_firebase():
 MESSAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_WS_RE = re.compile(r"\s+")
+
+
+def _strip_html_to_text(html: str) -> str:
+    if not html:
+        return ""
+    # Drop scripts/styles entirely (their text would otherwise leak into the snippet).
+    cleaned = re.sub(r"<(script|style)\b[^<]*(?:(?!</\1>)<[^<]*)*</\1>", " ", html, flags=re.IGNORECASE)
+    cleaned = _HTML_TAG_RE.sub(" ", cleaned)
+    cleaned = html_lib.unescape(cleaned)
+    return _WS_RE.sub(" ", cleaned).strip()
+
+
 def _extract_preview(raw_bytes: bytes) -> str:
     try:
         parsed = message_from_bytes(raw_bytes, policy=default)
-        for part in parsed.walk():
-            content_type = part.get_content_type()
-            if content_type == "text/plain":
-                payload = part.get_content()
-                return (payload or "").strip()[:2000]
-        if parsed.get_content_type() == "text/plain":
-            payload = parsed.get_content()
-            return (payload or "").strip()[:2000]
+        plain = ""
+        html = ""
+        if parsed.is_multipart():
+            for part in parsed.walk():
+                if part.get_content_disposition() == "attachment":
+                    continue
+                ctype = part.get_content_type()
+                if ctype == "text/plain" and not plain:
+                    plain = (part.get_content() or "").strip()
+                elif ctype == "text/html" and not html:
+                    html = (part.get_content() or "").strip()
+        else:
+            ctype = parsed.get_content_type()
+            content = parsed.get_content() or ""
+            if ctype == "text/plain":
+                plain = content.strip()
+            elif ctype == "text/html":
+                html = content.strip()
+        snippet = plain or _strip_html_to_text(html)
+        return snippet[:2000]
     except Exception:
         return ""
-    return ""
 
 
 class MaskSMTPHandler:

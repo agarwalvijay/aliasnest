@@ -459,34 +459,43 @@ def require_api_user(
     return user
 
 
-def _backfill_message_from_addr():
-    """One-time: replace stored envelope MAIL FROM (bounce/return-path) with
-    the From: header value from the .eml, so the inbox shows the real sender.
-    Idempotent: only updates rows where the .eml header differs from stored value."""
+def _backfill_message_metadata():
+    """One-time: re-derive From: header (was envelope MAIL FROM) and text_preview
+    (was empty for HTML-only emails) from the stored .eml. Idempotent via PRAGMA
+    user_version."""
+    from .smtp_receiver import _extract_preview
+
     db = SessionLocal()
     try:
         flag_row = db.execute(text("PRAGMA user_version")).fetchone()
         current_version = int(flag_row[0]) if flag_row else 0
-        if current_version >= 1:
+        if current_version >= 2:
             return
         messages = db.scalars(select(Message)).all()
-        updated = 0
+        from_updated = 0
+        preview_updated = 0
         for message in messages:
             try:
                 raw_path = Path(message.raw_path)
                 if not raw_path.exists():
                     continue
-                parsed = BytesParser(policy=policy.default).parsebytes(raw_path.read_bytes())
+                raw_bytes = raw_path.read_bytes()
+                parsed = BytesParser(policy=policy.default).parsebytes(raw_bytes)
                 header_from = (parsed.get("From") or "").strip()
                 if header_from and header_from != (message.from_addr or "").strip():
                     message.from_addr = header_from[:500]
-                    updated += 1
+                    from_updated += 1
+                if not (message.text_preview or "").strip():
+                    snippet = _extract_preview(raw_bytes)
+                    if snippet:
+                        message.text_preview = snippet
+                        preview_updated += 1
             except Exception:
                 continue
-        db.execute(text("PRAGMA user_version = 1"))
+        db.execute(text("PRAGMA user_version = 2"))
         db.commit()
-        if updated:
-            logger.info("Backfilled From: header for %d messages", updated)
+        if from_updated or preview_updated:
+            logger.info("Backfill complete — From: %d, preview: %d", from_updated, preview_updated)
     finally:
         db.close()
 
@@ -512,7 +521,7 @@ def startup_event():
     _ensure_user_timezone_column()
     _ensure_mask_is_active_column()
     _ensure_default_domain()
-    _backfill_message_from_addr()
+    _backfill_message_metadata()
     smtp_runtime.start()
 
 
