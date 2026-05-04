@@ -22,6 +22,7 @@ import * as SecureStore from "expo-secure-store";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import * as Notifications from "expo-notifications";
+import { WebView } from "react-native-webview";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -79,7 +80,7 @@ type Message = {
   timezone: string;
 };
 
-type MessageDetail = Message & { body: string };
+type MessageDetail = Message & { body: string; body_html?: string };
 
 type InboxMessage = Message & { mask_address: string };
 
@@ -106,15 +107,27 @@ const TIMEZONE_OPTIONS = [
   "Australia/Sydney",
 ];
 
+function displayName(addr: string): string {
+  if (!addr) return "";
+  const m = addr.match(/^([^<]+?)\s*</);
+  return m ? m[1].trim().replace(/^"|"$/g, "") : addr.replace(/[<>]/g, "").trim();
+}
+
+function emailOnly(addr: string): string {
+  if (!addr) return "";
+  const m = addr.match(/<([^>]+)>/);
+  return (m ? m[1] : addr).trim();
+}
+
 function senderLabel(message: InboxMessage): string {
-  return message.is_outbound ? `To: ${message.to}` : message.from;
+  return message.is_outbound ? `To: ${displayName(message.to)}` : displayName(message.from);
 }
 
 function initialsFromSender(sender: string): string {
-  const clean = sender.replace(/<.*?>/g, "").trim();
+  const clean = displayName(sender);
   const parts = clean.split(/[\s@._-]+/).filter(Boolean);
   if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase();
   return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
 }
 
@@ -127,13 +140,59 @@ function avatarColor(seed: string): string {
 }
 
 function shortTime(isoUtc: string): string {
-  const date = new Date(isoUtc);
-  const now = new Date();
-  const sameDay = date.toDateString() === now.toDateString();
-  if (sameDay) {
-    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  }
-  return date.toLocaleDateString([], { month: "short", day: "numeric" });
+  try {
+    const d = new Date(isoUtc);
+    const now = new Date();
+    const sameDay = d.toDateString() === now.toDateString();
+    if (sameDay) return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const sameYear = d.getFullYear() === now.getFullYear();
+    return d.toLocaleDateString([], sameYear ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" });
+  } catch { return ""; }
+}
+
+function HtmlMessageBody({ html }: { html: string }) {
+  const [height, setHeight] = useState(140);
+  const sanitized = useMemo(
+    () =>
+      html
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+        .replace(/\son\w+\s*=\s*"[^"]*"/gi, "")
+        .replace(/\son\w+\s*=\s*'[^']*'/gi, "")
+        .replace(/\son\w+\s*=\s*[^\s>]*/gi, ""),
+    [html],
+  );
+  const document = useMemo(
+    () => `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><base target="_blank"><style>
+      html,body{margin:0;padding:0;background:#fff;color:#202124;font-family:-apple-system,Roboto,sans-serif;font-size:15px;line-height:1.55;word-wrap:break-word;overflow-wrap:anywhere;-webkit-text-size-adjust:100%;}
+      body{padding:8px 12px;}
+      img{max-width:100%;height:auto;}
+      table{max-width:100%;}
+      a{color:#1a73e8;}
+      blockquote{border-left:3px solid #e8eaed;margin:8px 0;padding:0 12px;color:#5f6368;}
+      pre,code{font-family:Menlo,Consolas,monospace;background:#f6f8fc;border-radius:4px;}
+      pre{padding:8px;overflow-x:auto;}
+      code{padding:1px 4px;}
+    </style></head><body>${sanitized}<script>
+      function postH(){window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(String(Math.max(document.documentElement.scrollHeight,document.body.scrollHeight)));}
+      window.addEventListener('load',function(){postH();setTimeout(postH,300);Array.from(document.images).forEach(function(i){i.addEventListener('load',postH);});});
+    </script></body></html>`,
+    [sanitized],
+  );
+  return (
+    <View style={[styles.htmlBody, { height }]}>
+      <WebView
+        originWhitelist={["*"]}
+        source={{ html: document }}
+        scrollEnabled={false}
+        showsVerticalScrollIndicator={false}
+        onMessage={(e) => {
+          const next = parseInt(e.nativeEvent.data, 10);
+          if (!Number.isNaN(next) && next > 0) setHeight(next + 4);
+        }}
+        style={{ backgroundColor: "transparent" }}
+      />
+    </View>
+  );
 }
 
 const SWIPE_THRESHOLD = 90;
@@ -821,7 +880,7 @@ export default function App() {
           <>
             <View style={styles.headerLeft}>
               <TouchableOpacity style={styles.iconButton} onPress={() => setDrawerOpen(true)}>
-                <MaterialCommunityIcons name="menu" size={22} color="#fff" />
+                <MaterialCommunityIcons name="menu" size={22} color="#5f6368" />
               </TouchableOpacity>
               <View>
                 <Text style={styles.headerTitle}>Inbox</Text>
@@ -829,7 +888,7 @@ export default function App() {
               </View>
             </View>
             <TouchableOpacity style={styles.iconButton} onPress={() => void refreshAccount(token, selectedMaskId)}>
-              <MaterialCommunityIcons name="refresh" size={22} color="#fff" />
+              <MaterialCommunityIcons name="refresh" size={22} color="#5f6368" />
             </TouchableOpacity>
           </>
         ) : null}
@@ -838,7 +897,7 @@ export default function App() {
           <>
             <View style={styles.headerLeft}>
               <TouchableOpacity style={styles.iconButton} onPress={goBackToInbox}>
-                <MaterialCommunityIcons name="arrow-left" size={22} color="#fff" />
+                <MaterialCommunityIcons name="arrow-left" size={22} color="#5f6368" />
               </TouchableOpacity>
               <Text style={styles.headerTitle}>Message</Text>
             </View>
@@ -848,12 +907,12 @@ export default function App() {
                   <MaterialCommunityIcons
                     name={selectedMessage?.is_read ? "email-outline" : "email-open-outline"}
                     size={20}
-                    color="#0a66c2"
+                    color="#5f6368"
                   />
                 </TouchableOpacity>
               ) : null}
               <TouchableOpacity style={styles.iconButtonDanger} onPress={() => void deleteMessage()}>
-                <MaterialCommunityIcons name="trash-can-outline" size={19} color="#c4314b" />
+                <MaterialCommunityIcons name="trash-can-outline" size={20} color="#5f6368" />
               </TouchableOpacity>
             </View>
           </>
@@ -863,7 +922,7 @@ export default function App() {
           <>
             <View style={styles.headerLeft}>
               <TouchableOpacity style={styles.iconButton} onPress={() => setViewMode("inbox")}>
-                <MaterialCommunityIcons name="arrow-left" size={22} color="#fff" />
+                <MaterialCommunityIcons name="arrow-left" size={22} color="#5f6368" />
               </TouchableOpacity>
               <Text style={styles.headerTitle}>Settings</Text>
             </View>
@@ -890,21 +949,20 @@ export default function App() {
                   .then(() => setMessages((prev) => prev.filter((m) => m.id !== item.id)))
                   .catch(() => void refreshAccount(token, selectedMaskId));
               }}>
-                <TouchableOpacity style={[styles.messageRow, isUnread && styles.messageUnread]} onPress={() => void openMessage(item.id)}>
-                  <View style={styles.rowMain}>
-                    <View style={[styles.avatarCircle, { backgroundColor: avatarColor(senderLabel(item)) }]}>
-                      <Text style={styles.avatarText}>{initialsFromSender(senderLabel(item))}</Text>
+                <TouchableOpacity style={[styles.messageRow, isUnread && styles.messageUnread]} onPress={() => void openMessage(item.id)} activeOpacity={0.7}>
+                  <View style={[styles.avatarCircle, { backgroundColor: avatarColor(senderLabel(item)) }]}>
+                    <Text style={styles.avatarText}>{initialsFromSender(senderLabel(item))}</Text>
+                  </View>
+                  <View style={styles.rowContent}>
+                    <View style={styles.messageTopLine}>
+                      <Text style={[styles.senderText, isUnread && styles.senderTextUnread]} numberOfLines={1}>{senderLabel(item)}</Text>
+                      <Text style={[styles.timeText, isUnread && styles.timeTextUnread]}>{shortTime(item.received_at_utc)}</Text>
                     </View>
-                    <View style={styles.rowContent}>
-                      <View style={styles.messageTopLine}>
-                        <Text style={[styles.senderText, isUnread && styles.senderTextUnread]} numberOfLines={1}>{senderLabel(item)}</Text>
-                        {isUnread ? <View style={styles.unreadDot} /> : null}
-                        <Text style={styles.timeText}>{item.received_at_local}</Text>
-                      </View>
-                      <Text style={[styles.subjectText, isUnread && styles.subjectTextUnread]} numberOfLines={1}>{item.subject}</Text>
-                      {item.preview ? <Text style={styles.previewText} numberOfLines={1}>{item.preview}</Text> : null}
+                    <Text style={[styles.subjectText, isUnread && styles.subjectTextUnread]} numberOfLines={1}>{item.subject || "(no subject)"}</Text>
+                    {item.preview ? <Text style={styles.previewText} numberOfLines={1}>{item.preview}</Text> : null}
+                    {selectedMaskId === null ? (
                       <Text style={styles.aliasText} numberOfLines={1}>{item.mask_address}</Text>
-                    </View>
+                    ) : null}
                   </View>
                 </TouchableOpacity>
               </SwipeableRow>
@@ -919,17 +977,15 @@ export default function App() {
           <ScrollView style={styles.detailScreen}>
             {selectedMessage ? (
               <>
-                <Text style={styles.detailSubject}>{selectedMessage.subject}</Text>
+                <Text style={styles.detailSubject}>{selectedMessage.subject || "(no subject)"}</Text>
                 <View style={styles.detailHeaderRow}>
                   <View style={[styles.avatarCircle, styles.detailAvatar, { backgroundColor: avatarColor(selectedMessage.from) }]}>
                     <Text style={styles.avatarText}>{initialsFromSender(selectedMessage.from)}</Text>
                   </View>
                   <View style={styles.detailMetaColumn}>
-                    <Text style={styles.detailMeta} numberOfLines={1}>From: {selectedMessage.from}</Text>
-                    <Text style={styles.detailMeta} numberOfLines={1}>To: {selectedMessage.to}</Text>
-                    <Text style={styles.detailMeta}>
-                      {selectedMessage.is_outbound ? "Sent" : "Received"}: {selectedMessage.received_at_local} {selectedMessage.timezone}
-                    </Text>
+                    <Text style={styles.detailFromName} numberOfLines={1}>{displayName(selectedMessage.from) || emailOnly(selectedMessage.from)}</Text>
+                    <Text style={styles.detailMetaSub} numberOfLines={1}>to {emailOnly(selectedMessage.to)}</Text>
+                    <Text style={styles.detailMetaSub}>{selectedMessage.received_at_local}</Text>
                   </View>
                   {!selectedMessage.is_outbound ? (
                     <View style={styles.inlineReplyIcons}>
@@ -940,7 +996,7 @@ export default function App() {
                           setShowReplyComposer(true);
                         }}
                       >
-                        <MaterialCommunityIcons name="reply-outline" size={19} color="#0a66c2" />
+                        <MaterialCommunityIcons name="reply-outline" size={19} color="#1a73e8" />
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.inlineReplyBtn}
@@ -949,15 +1005,19 @@ export default function App() {
                           setShowReplyComposer(true);
                         }}
                       >
-                        <MaterialCommunityIcons name="reply-all-outline" size={19} color="#0a66c2" />
+                        <MaterialCommunityIcons name="reply-all-outline" size={19} color="#1a73e8" />
                       </TouchableOpacity>
                     </View>
                   ) : null}
                 </View>
 
-                <View style={styles.bodyCard}>
-                  <Text style={styles.bodyText}>{selectedMessage.body}</Text>
-                </View>
+                {selectedMessage.body_html ? (
+                  <HtmlMessageBody html={selectedMessage.body_html} />
+                ) : (
+                  <View style={styles.bodyCard}>
+                    <Text style={styles.bodyText}>{selectedMessage.body}</Text>
+                  </View>
+                )}
 
                 {showReplyComposer ? (
                   <View style={styles.replyComposerCard}>
@@ -1224,7 +1284,7 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f4f6fa",
+    backgroundColor: "#fff",
   },
   centered: {
     flex: 1,
@@ -1232,63 +1292,60 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   header: {
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 10,
+    paddingHorizontal: 8,
+    paddingTop: 6,
+    paddingBottom: 8,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#0a66c2",
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e8eaed",
   },
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
     flex: 1,
   },
   messageHeaderActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 4,
   },
   headerTitle: {
-    fontSize: 19,
-    fontWeight: "600",
-    color: "#ffffff",
+    fontSize: 17,
+    fontWeight: "500",
+    color: "#202124",
   },
   headerSubTitle: {
     fontSize: 12,
-    color: "#d9e7fb",
+    color: "#5f6368",
     maxWidth: 250,
   },
   iconButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    borderWidth: 0,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "transparent",
   },
   iconButtonLight: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#c9dbf3",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#ffffff",
+    backgroundColor: "transparent",
   },
   iconButtonDanger: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#f0b8c2",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#ffffff",
+    backgroundColor: "transparent",
   },
   iconButtonText: {
     fontSize: 20,
@@ -1378,38 +1435,35 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   messageRow: {
-    backgroundColor: "#ffffff",
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e9edf5",
-  },
-  messageUnread: {
-    borderLeftWidth: 4,
-    borderLeftColor: "#0a66c2",
-    paddingLeft: 6,
-    backgroundColor: "#f8fbff",
-  },
-  rowMain: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 10,
+    gap: 12,
+    backgroundColor: "#ffffff",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f3f4",
+  },
+  messageUnread: {
+    backgroundColor: "#fff",
   },
   avatarCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 2,
+    marginTop: 1,
   },
   avatarText: {
     color: "#ffffff",
-    fontWeight: "700",
-    fontSize: 16,
+    fontWeight: "500",
+    fontSize: 15,
+    letterSpacing: -0.2,
   },
   rowContent: {
     flex: 1,
+    minWidth: 0,
   },
   messageTopLine: {
     flexDirection: "row",
@@ -1419,44 +1473,44 @@ const styles = StyleSheet.create({
   },
   senderText: {
     flex: 1,
-    color: "#1b1f26",
-    fontSize: 16,
-    fontWeight: "500",
+    color: "#5f6368",
+    fontSize: 14,
+    fontWeight: "400",
   },
   senderTextUnread: {
     fontWeight: "700",
+    color: "#202124",
   },
   timeText: {
-    color: "#6a7383",
+    color: "#5f6368",
     fontSize: 12,
     marginLeft: 6,
+    fontWeight: "400",
+  },
+  timeTextUnread: {
+    fontWeight: "700",
+    color: "#202124",
   },
   subjectText: {
-    color: "#232a35",
-    fontSize: 15,
-    marginTop: 3,
+    color: "#5f6368",
+    fontSize: 14,
+    marginTop: 1,
     fontWeight: "400",
   },
   subjectTextUnread: {
-    fontWeight: "600",
+    fontWeight: "700",
+    color: "#202124",
   },
   previewText: {
-    color: "#8a9ab4",
-    fontSize: 12,
-    marginTop: 2,
+    color: "#5f6368",
+    fontSize: 13,
+    marginTop: 1,
   },
   aliasText: {
-    color: "#6d7a90",
-    fontSize: 13,
-    marginTop: 3,
-  },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#0a66c2",
-    marginHorizontal: 6,
-    marginTop: 2,
+    color: "#1a73e8",
+    fontSize: 11,
+    marginTop: 4,
+    fontWeight: "500",
   },
   emptyText: {
     color: "#607089",
@@ -1465,23 +1519,27 @@ const styles = StyleSheet.create({
   },
   detailScreen: {
     flex: 1,
-    paddingHorizontal: 12,
-    paddingTop: 12,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    backgroundColor: "#fff",
   },
   messageScreenWrap: {
     flex: 1,
+    backgroundColor: "#fff",
   },
   detailSubject: {
-    color: "#0f172a",
-    fontSize: 21,
-    fontWeight: "700",
-    marginBottom: 8,
+    color: "#202124",
+    fontSize: 22,
+    fontWeight: "400",
+    marginBottom: 14,
+    letterSpacing: -0.1,
+    lineHeight: 28,
   },
   detailHeaderRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-    marginBottom: 6,
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 12,
   },
   detailAvatar: {
     marginTop: 0,
@@ -1489,8 +1547,19 @@ const styles = StyleSheet.create({
   detailMetaColumn: {
     flex: 1,
   },
+  detailFromName: {
+    color: "#202124",
+    fontSize: 14,
+    fontWeight: "500",
+    marginBottom: 1,
+  },
+  detailMetaSub: {
+    color: "#5f6368",
+    fontSize: 12,
+    marginTop: 1,
+  },
   detailMeta: {
-    color: "#51607a",
+    color: "#5f6368",
     fontSize: 12,
     marginBottom: 2,
   },
@@ -1592,32 +1661,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   bodyCard: {
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: "#e4eaf6",
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    padding: 10,
+    marginTop: 4,
+    paddingVertical: 8,
   },
   bodyText: {
-    color: "#18233a",
-    fontSize: 13,
-    lineHeight: 20,
+    color: "#202124",
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  htmlBody: {
+    marginTop: 4,
+    backgroundColor: "#fff",
+    overflow: "hidden",
   },
   inlineReplyIcons: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 4,
   },
   inlineReplyBtn: {
-    borderWidth: 1,
-    borderColor: "#bfd3ef",
-    borderRadius: 999,
-    width: 34,
-    height: 34,
+    borderRadius: 20,
+    width: 40,
+    height: 40,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#f8fbff",
+    backgroundColor: "transparent",
   },
   replyComposerCard: {
     marginTop: 10,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "./api";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -6,14 +6,29 @@ function displayName(addr: string): string {
   const m = addr.match(/^([^<]+?)\s*</);
   return m ? m[1].trim() : addr.replace(/[<>]/g, "").trim();
 }
+function emailOnly(addr: string): string {
+  const m = addr.match(/<([^>]+)>/);
+  return (m ? m[1] : addr).trim();
+}
 function senderInitial(addr: string): string {
   return displayName(addr).charAt(0).toUpperCase() || "?";
 }
-const AVATAR_PALETTE = ["#0a66c2","#0891b2","#059669","#7c3aed","#db2777","#ea580c","#0284c7","#65a30d"];
+const AVATAR_PALETTE = ["#1a73e8","#0891b2","#137333","#7c3aed","#d93025","#e8710a","#0284c7","#188038"];
 function avatarColor(addr: string): string {
   let h = 0;
   for (const c of addr) h = c.charCodeAt(0) + ((h << 5) - h);
   return AVATAR_PALETTE[Math.abs(h) % AVATAR_PALETTE.length];
+}
+
+function shortTime(isoUtc: string, localFallback: string): string {
+  try {
+    const d = new Date(isoUtc);
+    const now = new Date();
+    const sameDay = d.toDateString() === now.toDateString();
+    if (sameDay) return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const sameYear = d.getFullYear() === now.getFullYear();
+    return d.toLocaleDateString([], sameYear ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" });
+  } catch { return localFallback; }
 }
 
 // ── SVG icons ─────────────────────────────────────────────────────────────────
@@ -111,6 +126,64 @@ const IconCheck = () => (
 );
 // ── end icons ─────────────────────────────────────────────────────────────────
 
+// Sandboxed iframe renderer for HTML email bodies. Auto-resizes to content.
+function HtmlBody({ html }: { html: string }) {
+  const ref = useRef<HTMLIFrameElement>(null);
+  const [height, setHeight] = useState(120);
+
+  const srcDoc = useMemo(() => {
+    const sanitizedHtml = html
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+      .replace(/\son\w+\s*=\s*"[^"]*"/gi, "")
+      .replace(/\son\w+\s*=\s*'[^']*'/gi, "")
+      .replace(/\son\w+\s*=\s*[^\s>]*/gi, "");
+    return `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>
+      html,body{margin:0;padding:0;background:#fff;color:#202124;font-family:"Google Sans","Inter",system-ui,-apple-system,Roboto,sans-serif;font-size:14px;line-height:1.55;word-wrap:break-word;overflow-wrap:anywhere;}
+      body{padding:0;}
+      img{max-width:100%;height:auto;}
+      table{max-width:100%;border-collapse:collapse;}
+      a{color:#1a73e8;}
+      blockquote{border-left:3px solid #e8eaed;margin:8px 0;padding:0 12px;color:#5f6368;}
+      pre,code{font-family:"Roboto Mono","SF Mono",Menlo,monospace;background:#f6f8fc;border-radius:4px;}
+      pre{padding:8px;overflow-x:auto;}
+      code{padding:1px 4px;}
+    </style></head><body>${sanitizedHtml}</body></html>`;
+  }, [html]);
+
+  useEffect(() => {
+    const iframe = ref.current;
+    if (!iframe) return;
+    const resize = () => {
+      try {
+        const doc = iframe.contentDocument;
+        if (!doc) return;
+        const next = Math.max(doc.documentElement.scrollHeight, doc.body?.scrollHeight || 0);
+        if (next > 0) setHeight(next + 4);
+      } catch { /* cross-origin guard */ }
+    };
+    const onLoad = () => {
+      resize();
+      // images often load after the load event
+      const imgs = iframe.contentDocument?.images;
+      if (imgs) Array.from(imgs).forEach((img) => img.addEventListener("load", resize));
+      window.setTimeout(resize, 250);
+    };
+    iframe.addEventListener("load", onLoad);
+    return () => iframe.removeEventListener("load", onLoad);
+  }, [srcDoc]);
+
+  return (
+    <iframe
+      ref={ref}
+      className="read-body-html"
+      sandbox="allow-popups allow-popups-to-escape-sandbox"
+      srcDoc={srcDoc}
+      style={{ height: `${height}px` }}
+      title="message-body"
+    />
+  );
+}
+
 type User = { id: number; email: string; timezone: string };
 type Mask = { id: number; address: string; local_part: string; domain: string; is_active: boolean; unread_count: number };
 type Domain = {
@@ -140,7 +213,7 @@ type Message = {
   timezone: string;
   mask_address?: string;
 };
-type MessageDetail = Message & { body: string };
+type MessageDetail = Message & { body: string; body_html?: string };
 
 const TOKEN_KEY = "aliasnest_web_token";
 const TIMEZONE_OPTIONS = [
@@ -547,11 +620,11 @@ export default function App() {
             onClick={() => { setSelectedMessage(null); token && void hydrate(token, null); }}
           >
             <IconInbox />
-            <span>All Inbox</span>
+            <span>Inbox</span>
             {totalUnread > 0 && <span className="sidebar-badge">{totalUnread}</span>}
           </button>
 
-          {masks.length > 0 && <div className="sidebar-label">MASKS</div>}
+          {masks.length > 0 && <div className="sidebar-label">Aliases</div>}
 
           {masks.map((mask) => (
             <div className={`mask-item${!mask.is_active ? " mask-paused" : ""}`} key={mask.id}>
@@ -571,129 +644,137 @@ export default function App() {
               <button
                 className="mask-del-btn"
                 onClick={() => void toggleMask(mask.id, !mask.is_active)}
-                title={mask.is_active ? "Pause mask" : "Resume mask"}
+                title={mask.is_active ? "Pause alias" : "Resume alias"}
               >
                 {mask.is_active ? <IconPause /> : <IconPlay />}
               </button>
-              <button className="mask-del-btn" onClick={() => void deleteMask(mask.id)} title="Delete mask">
+              <button className="mask-del-btn" onClick={() => void deleteMask(mask.id)} title="Delete alias">
                 <IconTrash />
               </button>
             </div>
           ))}
 
           {masks.length === 0 && (
-            <p className="sidebar-empty">No masks yet. Create one in Settings.</p>
+            <p className="sidebar-empty">No aliases yet. Create one in Settings.</p>
           )}
         </aside>
 
-        {/* Message list */}
-        <section className="list-pane">
-          <div className="list-header">
-            <span className="list-title">{activeMask ? activeMask.address : "All Inbox"}</span>
-            {messages.length > 0 && <span className="list-count">{messages.length}</span>}
-          </div>
-          <div className="list-body">
-            {messages.length === 0 && (
-              <div className="empty-state">
-                <IconInbox />
-                <p>No messages</p>
-              </div>
-            )}
-            {messages.map((msg) => {
-              const senderAddr = msg.is_outbound ? msg.to : msg.from;
-              return (
-                <button
-                  key={msg.id}
-                  className={`message-row${!msg.is_outbound && !msg.is_read ? " unread" : ""}${selectedMessage?.id === msg.id ? " selected" : ""}`}
-                  onClick={() => void openMessage(msg.id)}
-                >
-                  <div className="msg-avatar" style={{ background: avatarColor(senderAddr) }}>
-                    {senderInitial(senderAddr)}
-                  </div>
-                  <div className="msg-info">
-                    <div className="msg-row-top">
-                      <span className="msg-sender">
-                        {msg.is_outbound ? `→ ${displayName(msg.to)}` : displayName(msg.from)}
-                      </span>
-                      <span className="msg-time">{msg.received_at_local}</span>
-                    </div>
-                    <div className="msg-subject">{msg.subject}</div>
-                    {msg.preview && <div className="msg-preview">{msg.preview}</div>}
-                    {!selectedMaskId && msg.mask_address && (
-                      <div className="msg-mask-tag">{msg.mask_address}</div>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Read pane */}
-        <section className="read-pane">
-          {selectedMessage ? (
-            <>
-              <div className="read-header">
-                <h2 className="read-subject">{selectedMessage.subject}</h2>
-                <div className="read-meta">
-                  <div className="read-avatar" style={{ background: avatarColor(selectedMessage.from) }}>
-                    {senderInitial(selectedMessage.from)}
-                  </div>
-                  <div className="read-meta-info">
-                    <div className="read-from-name">{displayName(selectedMessage.from)}</div>
-                    <div className="read-from-detail">
-                      <span>{selectedMessage.from}</span>
-                      <span className="read-meta-sep">→</span>
-                      <span>{selectedMessage.to}</span>
-                    </div>
-                  </div>
-                  <div className="read-actions">
-                    {!selectedMessage.is_outbound && (
-                      <>
-                        <button className={`icon-btn${replyMode === "reply" ? " active" : ""}`} title="Reply" onClick={() => setReplyMode("reply")}>
-                          <IconReply />
-                        </button>
-                        <button className={`icon-btn${replyMode === "reply_all" ? " active" : ""}`} title="Reply all" onClick={() => setReplyMode("reply_all")}>
-                          <IconReplyAll />
-                        </button>
-                        <button className="icon-btn" title={selectedMessage.is_read ? "Mark unread" : "Mark read"} onClick={() => void toggleUnread()}>
-                          {selectedMessage.is_read ? <IconMailUnread /> : <IconMailRead />}
-                        </button>
-                      </>
-                    )}
-                    <button className="icon-btn danger-icon" title="Delete" onClick={() => void deleteMessage()}>
-                      <IconTrash />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="read-divider" />
-
-              {!selectedMessage.is_outbound && (
-                <div className="reply-box">
-                  <textarea
-                    value={replyBody}
-                    onChange={(e) => setReplyBody(e.target.value)}
-                    placeholder={replyMode === "reply_all" ? "Reply to all…" : "Reply…"}
-                  />
-                  <div className="reply-actions">
-                    <button className="send-btn" onClick={() => void sendReply()} disabled={!replyBody.trim()}>
-                      Send {replyMode === "reply_all" ? "Reply All" : "Reply"}
-                    </button>
-                  </div>
+        <div className="main-area">
+          {/* Message list */}
+          <section className="list-pane">
+            <div className="list-header">
+              <span className="list-title">{activeMask ? activeMask.address : "Inbox"}</span>
+              {messages.length > 0 && <span className="list-count">{messages.length}</span>}
+            </div>
+            <div className="list-body">
+              {messages.length === 0 && (
+                <div className="empty-state">
+                  <IconInbox />
+                  <p>No messages</p>
                 </div>
               )}
-
-              <pre className="read-body">{selectedMessage.body}</pre>
-            </>
-          ) : (
-            <div className="read-empty">
-              <IconInbox />
-              <p>Select a message to read</p>
+              {messages.map((msg) => {
+                const senderAddr = msg.is_outbound ? msg.to : msg.from;
+                const senderText = msg.is_outbound ? `To: ${displayName(msg.to)}` : displayName(msg.from);
+                return (
+                  <button
+                    key={msg.id}
+                    className={`message-row${!msg.is_outbound && !msg.is_read ? " unread" : ""}${selectedMessage?.id === msg.id ? " selected" : ""}`}
+                    onClick={() => void openMessage(msg.id)}
+                  >
+                    <div className="msg-avatar" style={{ background: avatarColor(senderAddr) }}>
+                      {senderInitial(senderAddr)}
+                    </div>
+                    <div className="msg-info">
+                      <span className="msg-sender" title={senderAddr}>{senderText}</span>
+                      <span className="msg-subject-line">
+                        {!selectedMaskId && msg.mask_address && (
+                          <span className="msg-mask-tag">{msg.mask_address}</span>
+                        )}
+                        <span className="msg-subject">{msg.subject || "(no subject)"}</span>
+                        {msg.preview && <span className="msg-preview"> — {msg.preview}</span>}
+                      </span>
+                      <span className="msg-time">{shortTime(msg.received_at_utc, msg.received_at_local)}</span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
-          )}
-        </section>
+          </section>
+
+          {/* Read pane */}
+          <section className="read-pane">
+            {selectedMessage ? (
+              <>
+                <div className="read-toolbar">
+                  {!selectedMessage.is_outbound && (
+                    <>
+                      <button className={`icon-btn${replyMode === "reply" ? " active" : ""}`} title="Reply" onClick={() => setReplyMode("reply")}>
+                        <IconReply />
+                      </button>
+                      <button className={`icon-btn${replyMode === "reply_all" ? " active" : ""}`} title="Reply all" onClick={() => setReplyMode("reply_all")}>
+                        <IconReplyAll />
+                      </button>
+                      <button className="icon-btn" title={selectedMessage.is_read ? "Mark unread" : "Mark read"} onClick={() => void toggleUnread()}>
+                        {selectedMessage.is_read ? <IconMailUnread /> : <IconMailRead />}
+                      </button>
+                    </>
+                  )}
+                  <button className="icon-btn danger-icon" title="Delete" onClick={() => void deleteMessage()}>
+                    <IconTrash />
+                  </button>
+                  <span className="read-toolbar-spacer" />
+                </div>
+
+                <div className="read-content">
+                  <h2 className="read-subject">{selectedMessage.subject || "(no subject)"}</h2>
+                  <div className="read-meta">
+                    <div className="read-avatar" style={{ background: avatarColor(selectedMessage.from) }}>
+                      {senderInitial(selectedMessage.from)}
+                    </div>
+                    <div className="read-meta-info">
+                      <div className="read-from-name">
+                        {displayName(selectedMessage.from)}
+                        <span className="read-from-email">&lt;{emailOnly(selectedMessage.from)}&gt;</span>
+                      </div>
+                      <div className="read-from-detail">
+                        <span>to {emailOnly(selectedMessage.to)}</span>
+                      </div>
+                    </div>
+                    <div className="read-time">{selectedMessage.received_at_local}</div>
+                  </div>
+                </div>
+
+                <div className="read-body-wrap">
+                  {selectedMessage.body_html
+                    ? <HtmlBody html={selectedMessage.body_html} />
+                    : <pre className="read-body">{selectedMessage.body}</pre>}
+                </div>
+
+                {!selectedMessage.is_outbound && (
+                  <div className="reply-box">
+                    <textarea
+                      value={replyBody}
+                      onChange={(e) => setReplyBody(e.target.value)}
+                      placeholder={replyMode === "reply_all" ? "Reply to all…" : `Reply to ${displayName(selectedMessage.from)}…`}
+                    />
+                    <div className="reply-actions">
+                      <span className="reply-mode-toggle" />
+                      <button className="send-btn" onClick={() => void sendReply()} disabled={!replyBody.trim()}>
+                        Send
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="read-empty">
+                <IconInbox />
+                <p>Select a message to read</p>
+              </div>
+            )}
+          </section>
+        </div>
       </main>
     </div>
   );

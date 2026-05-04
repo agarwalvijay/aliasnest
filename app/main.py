@@ -160,24 +160,43 @@ def _compute_reply_targets(mask: Mask, target_email: str, to_cc_addresses: list[
 
 
 def _extract_message_body(message: Message) -> str:
+    text, _ = _extract_message_bodies(message)
+    return text
+
+
+def _extract_message_bodies(message: Message) -> tuple[str, str]:
+    text_body = ""
+    html_body = ""
     try:
         raw_path = Path(message.raw_path)
         if not raw_path.exists():
-            return message.text_preview or ""
+            return (message.text_preview or "", "")
         parsed = BytesParser(policy=policy.default).parsebytes(raw_path.read_bytes())
         if parsed.is_multipart():
             for part in parsed.walk():
-                if part.get_content_type() == "text/plain":
+                if part.get_content_disposition() == "attachment":
+                    continue
+                ctype = part.get_content_type()
+                if ctype == "text/plain" and not text_body:
                     content = part.get_content()
                     if content:
-                        return str(content).strip()
-        elif parsed.get_content_type() == "text/plain":
+                        text_body = str(content).strip()
+                elif ctype == "text/html" and not html_body:
+                    content = part.get_content()
+                    if content:
+                        html_body = str(content).strip()
+        else:
+            ctype = parsed.get_content_type()
             content = parsed.get_content()
-            if content:
-                return str(content).strip()
+            if ctype == "text/plain" and content:
+                text_body = str(content).strip()
+            elif ctype == "text/html" and content:
+                html_body = str(content).strip()
     except Exception:
         pass
-    return message.text_preview or ""
+    if not text_body:
+        text_body = message.text_preview or ""
+    return (text_body, html_body)
 
 
 def _send_reply_email(mask: Mask, target_emails: list[str], reply_body: str, in_reply_to: str, references: str, original_subject: str):
@@ -975,7 +994,9 @@ def _api_get_message_for_user(message_id: int, user_id: int, db: Session) -> Mes
 def api_get_message(message_id: int, user: User = Depends(require_api_user), db: Session = Depends(get_db)):
     message = _api_get_message_for_user(message_id, user.id, db)
     data = _message_to_api_payload(message, _safe_tz_name(user.timezone))
-    data["body"] = _extract_message_body(message)
+    text_body, html_body = _extract_message_bodies(message)
+    data["body"] = text_body
+    data["body_html"] = html_body
     return data
 
 
