@@ -54,34 +54,63 @@ def _strip_html_to_text(html: str) -> str:
     return _WS_RE.sub(" ", cleaned).strip()
 
 
+def _safe_part_content(part) -> str:
+    """Return decoded text content for a MIME part, falling back through encodings.
+    A malformed charset on one part should not abort extraction for the message."""
+    try:
+        content = part.get_content()
+        if isinstance(content, str):
+            return content
+        if isinstance(content, bytes):
+            return content.decode("utf-8", errors="replace")
+    except Exception:
+        pass
+    try:
+        payload = part.get_payload(decode=True)
+        if not payload:
+            return ""
+        charset = (part.get_content_charset() or "utf-8").strip() or "utf-8"
+        try:
+            return payload.decode(charset, errors="replace")
+        except (LookupError, UnicodeDecodeError):
+            return payload.decode("utf-8", errors="replace")
+    except Exception:
+        return ""
+
+
 def _extract_preview(raw_bytes: bytes) -> str:
     try:
         parsed = message_from_bytes(raw_bytes, policy=default)
-        plain = ""
-        html = ""
-        if parsed.is_multipart():
-            for part in parsed.walk():
-                if part.get_content_disposition() == "attachment":
-                    continue
-                ctype = part.get_content_type()
-                if ctype == "text/plain" and not plain:
-                    plain = (part.get_content() or "").strip()
-                elif ctype == "text/html" and not html:
-                    html = (part.get_content() or "").strip()
-        else:
-            ctype = parsed.get_content_type()
-            content = parsed.get_content() or ""
-            if ctype == "text/plain":
-                plain = content.strip()
-            elif ctype == "text/html":
-                html = content.strip()
-        snippet = plain or _strip_html_to_text(html)
-        if not snippet:
-            logger.info("preview empty: plain=%d html=%d", len(plain), len(html))
-        return snippet[:2000]
     except Exception as exc:
-        logger.warning("preview extract failed: %s", exc)
+        logger.warning("preview parse failed: %s", exc)
         return ""
+
+    plain = ""
+    html = ""
+    for part in parsed.walk():
+        try:
+            if part.is_multipart():
+                continue
+            if part.get_content_disposition() == "attachment":
+                continue
+            ctype = (part.get_content_type() or "").lower()
+            if ctype not in ("text/plain", "text/html"):
+                continue
+            content = _safe_part_content(part).strip()
+            if not content:
+                continue
+            if ctype == "text/plain" and not plain:
+                plain = content
+            elif ctype == "text/html" and not html:
+                html = content
+        except Exception as exc:
+            logger.info("preview part skipped: %s", exc)
+            continue
+
+    snippet = plain or _strip_html_to_text(html)
+    if not snippet:
+        logger.info("preview empty: plain=%d html=%d", len(plain), len(html))
+    return snippet[:2000]
 
 
 class MaskSMTPHandler:
