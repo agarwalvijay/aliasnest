@@ -419,19 +419,8 @@ export default function App() {
       return;
     }
 
-    const results = await Promise.all(
-      maskList.map(async (mask) => {
-        const payload = await apiRequest<{ items: Message[] }>(`/api/masks/${mask.id}/messages?limit=60`, "GET", activeToken);
-        return payload.items.map((msg) => ({ ...msg, mask_address: mask.address }));
-      }),
-    );
-
-    const merged = results.flat().sort((a, b) => {
-      const tA = new Date(a.received_at_utc).getTime();
-      const tB = new Date(b.received_at_utc).getTime();
-      return tB - tA;
-    });
-    setMessages(merged);
+    const payload = await apiRequest<{ items: InboxMessage[] }>(`/api/inbox?limit=100`, "GET", activeToken);
+    setMessages(payload.items);
   }
 
   async function doLogin() {

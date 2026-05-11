@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import secrets
 import smtplib
+import threading
 from typing import Optional
 import uuid
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -267,6 +268,22 @@ def _ensure_mask_uniqueness_index():
     db = SessionLocal()
     try:
         db.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_mask_local_domain_idx ON masks(local_part, domain)"))
+        db.commit()
+    finally:
+        db.close()
+
+
+def _ensure_message_unread_index():
+    db = SessionLocal()
+    try:
+        db.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_messages_mask_unread "
+            "ON messages(mask_id, is_outbound, is_read)"
+        ))
+        db.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_messages_mask_received "
+            "ON messages(mask_id, received_at)"
+        ))
         db.commit()
     finally:
         db.close()
@@ -551,9 +568,10 @@ def startup_event():
     _ensure_message_read_column()
     _ensure_user_timezone_column()
     _ensure_mask_is_active_column()
+    _ensure_message_unread_index()
     _ensure_default_domain()
-    _backfill_message_metadata()
     smtp_runtime.start()
+    threading.Thread(target=_backfill_message_metadata, name="preview-backfill", daemon=True).start()
 
 
 @app.on_event("shutdown")
@@ -1040,7 +1058,6 @@ def api_list_mask_messages(
         .order_by(Message.received_at.desc())
         .limit(safe_limit)
     ).all()
-    _ensure_preview(messages, db)
     tz_name = _safe_tz_name(user.timezone)
     return {
         "mask": {
@@ -1051,6 +1068,29 @@ def api_list_mask_messages(
         },
         "items": [_message_to_api_payload(message, tz_name) for message in messages],
     }
+
+
+@app.get("/api/inbox")
+def api_list_inbox(
+    limit: int = 100,
+    user: User = Depends(require_api_user),
+    db: Session = Depends(get_db),
+):
+    safe_limit = max(1, min(limit, 200))
+    rows = db.execute(
+        select(Message, Mask.local_part, Mask.domain)
+        .join(Mask, Message.mask_id == Mask.id)
+        .where(Mask.user_id == user.id)
+        .order_by(Message.received_at.desc())
+        .limit(safe_limit)
+    ).all()
+    tz_name = _safe_tz_name(user.timezone)
+    items = []
+    for message, local_part, domain in rows:
+        payload = _message_to_api_payload(message, tz_name)
+        payload["mask_address"] = f"{local_part}@{domain}"
+        items.append(payload)
+    return {"items": items}
 
 
 def _api_get_message_for_user(message_id: int, user_id: int, db: Session) -> Message:

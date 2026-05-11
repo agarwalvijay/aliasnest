@@ -282,13 +282,9 @@ export default function App() {
       setMessages(payload.items.map((m) => ({ ...m, mask_address: mask?.address || "" })));
       return;
     }
-    const results = await Promise.all(
-      maskList.map(async (mask) => {
-        const payload = await apiRequest<{ items: Message[] }>(`/api/masks/${mask.id}/messages?limit=60`, "GET", activeToken);
-        return payload.items.map((m) => ({ ...m, mask_address: mask.address }));
-      }),
-    );
-    setMessages(results.flat().sort((a, b) => new Date(b.received_at_utc).getTime() - new Date(a.received_at_utc).getTime()));
+    if (maskList.length === 0) { setMessages([]); return; }
+    const payload = await apiRequest<{ items: Message[] }>(`/api/inbox?limit=100`, "GET", activeToken);
+    setMessages(payload.items);
   }
 
   async function login() {
