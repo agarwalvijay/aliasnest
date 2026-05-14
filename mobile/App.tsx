@@ -151,7 +151,6 @@ function shortTime(isoUtc: string): string {
 }
 
 function HtmlMessageBody({ html }: { html: string }) {
-  const [height, setHeight] = useState(140);
   const sanitized = useMemo(
     () =>
       html
@@ -172,26 +171,16 @@ function HtmlMessageBody({ html }: { html: string }) {
       pre,code{font-family:Menlo,Consolas,monospace;background:#f6f8fc;border-radius:4px;}
       pre{padding:8px;overflow-x:auto;}
       code{padding:1px 4px;}
-    </style></head><body>${sanitized}<script>
-      function postH(){window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(String(Math.max(document.documentElement.scrollHeight,document.body.scrollHeight)));}
-      window.addEventListener('load',function(){postH();setTimeout(postH,300);Array.from(document.images).forEach(function(i){i.addEventListener('load',postH);});});
-    </script></body></html>`,
+    </style></head><body>${sanitized}</body></html>`,
     [sanitized],
   );
   return (
-    <View style={[styles.htmlBody, { height }]}>
-      <WebView
-        originWhitelist={["*"]}
-        source={{ html: document }}
-        scrollEnabled={false}
-        showsVerticalScrollIndicator={false}
-        onMessage={(e) => {
-          const next = parseInt(e.nativeEvent.data, 10);
-          if (!Number.isNaN(next) && next > 0) setHeight(next + 4);
-        }}
-        style={{ backgroundColor: "transparent" }}
-      />
-    </View>
+    <WebView
+      originWhitelist={["*"]}
+      source={{ html: document }}
+      style={styles.htmlBody}
+      automaticallyAdjustContentInsets={false}
+    />
   );
 }
 
@@ -963,9 +952,9 @@ export default function App() {
       {viewMode === "message" ? (
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={styles.messageScreenWrap} {...messageSwipeResponder.panHandlers}>
-          <ScrollView style={styles.detailScreen}>
-            {selectedMessage ? (
-              <>
+          {selectedMessage ? (
+            <>
+              <View style={styles.detailHeader}>
                 <Text style={styles.detailSubject}>{selectedMessage.subject || "(no subject)"}</Text>
                 <View style={styles.detailHeaderRow}>
                   <View style={[styles.avatarCircle, styles.detailAvatar, { backgroundColor: avatarColor(selectedMessage.from) }]}>
@@ -999,46 +988,46 @@ export default function App() {
                     </View>
                   ) : null}
                 </View>
+              </View>
 
-                {selectedMessage.body_html ? (
-                  <HtmlMessageBody html={selectedMessage.body_html} />
-                ) : (
-                  <View style={styles.bodyCard}>
-                    <Text style={styles.bodyText}>{selectedMessage.body}</Text>
-                  </View>
-                )}
+              {selectedMessage.body_html ? (
+                <HtmlMessageBody html={selectedMessage.body_html} />
+              ) : (
+                <ScrollView style={styles.bodyScroll} contentContainerStyle={styles.bodyCard}>
+                  <Text style={styles.bodyText}>{selectedMessage.body}</Text>
+                </ScrollView>
+              )}
 
-                {showReplyComposer ? (
-                  <View style={styles.replyComposerCard}>
-                    <Text style={styles.replyComposerTitle}>{replyAllMode ? "Reply all" : "Reply"}</Text>
-                    <TextInput
-                      value={replyDraft}
-                      onChangeText={setReplyDraft}
-                      placeholder="Write your reply..."
-                      multiline
-                      style={styles.replyInput}
-                    />
-                    <View style={styles.replyComposerActions}>
-                      <TouchableOpacity
-                        style={styles.secondaryBtn}
-                        onPress={() => {
-                          setShowReplyComposer(false);
-                          setReplyDraft("");
-                        }}
-                      >
-                        <Text style={styles.secondaryBtnText}>Cancel</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.primaryBtnSmall} onPress={() => void sendReply()}>
-                        <Text style={styles.primaryBtnText}>Send</Text>
-                      </TouchableOpacity>
-                    </View>
+              {showReplyComposer ? (
+                <View style={styles.replyComposerCard}>
+                  <Text style={styles.replyComposerTitle}>{replyAllMode ? "Reply all" : "Reply"}</Text>
+                  <TextInput
+                    value={replyDraft}
+                    onChangeText={setReplyDraft}
+                    placeholder="Write your reply..."
+                    multiline
+                    style={styles.replyInput}
+                  />
+                  <View style={styles.replyComposerActions}>
+                    <TouchableOpacity
+                      style={styles.secondaryBtn}
+                      onPress={() => {
+                        setShowReplyComposer(false);
+                        setReplyDraft("");
+                      }}
+                    >
+                      <Text style={styles.secondaryBtnText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.primaryBtnSmall} onPress={() => void sendReply()}>
+                      <Text style={styles.primaryBtnText}>Send</Text>
+                    </TouchableOpacity>
                   </View>
-                ) : null}
-              </>
-            ) : (
-              <Text style={styles.emptyText}>No message selected.</Text>
-            )}
-          </ScrollView>
+                </View>
+              ) : null}
+            </>
+          ) : (
+            <Text style={styles.emptyText}>No message selected.</Text>
+          )}
         </View>
         </KeyboardAvoidingView>
       ) : null}
@@ -1506,14 +1495,14 @@ const styles = StyleSheet.create({
     padding: 18,
     fontSize: 14,
   },
-  detailScreen: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    backgroundColor: "#fff",
-  },
   messageScreenWrap: {
     flex: 1,
+    backgroundColor: "#fff",
+  },
+  detailHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 4,
     backgroundColor: "#fff",
   },
   detailSubject: {
@@ -1649,9 +1638,13 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     alignItems: "center",
   },
+  bodyScroll: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
   bodyCard: {
-    marginTop: 4,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   bodyText: {
     color: "#202124",
@@ -1659,9 +1652,8 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   htmlBody: {
-    marginTop: 4,
+    flex: 1,
     backgroundColor: "#fff",
-    overflow: "hidden",
   },
   inlineReplyIcons: {
     flexDirection: "row",
