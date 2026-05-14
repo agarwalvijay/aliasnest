@@ -124,7 +124,9 @@ class MaskSMTPHandler:
         try:
             for recipient in envelope.rcpt_tos:
                 local_part, _, domain = recipient.partition("@")
-                mask = db.scalar(select(Mask).where(Mask.local_part == local_part, Mask.domain == domain, Mask.is_active.is_(True)))
+                # Plus-addressing: foo+anything@domain routes to foo@domain.
+                base_local, _, _ = local_part.partition("+")
+                mask = db.scalar(select(Mask).where(Mask.local_part == base_local, Mask.domain == domain, Mask.is_active.is_(True)))
                 if not mask:
                     continue
 

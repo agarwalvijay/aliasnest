@@ -75,7 +75,8 @@ def _normalize_domain(domain: str) -> str:
 
 
 def _is_valid_local_part(local_part: str) -> bool:
-    return bool(re.fullmatch(r"[a-zA-Z0-9._+-]{2,64}", local_part))
+    # `+` is reserved for plus-addressing (foo+tag@d → foo@d), so it cannot appear in a mask itself.
+    return bool(re.fullmatch(r"[a-zA-Z0-9._-]{2,64}", local_part))
 
 
 def _is_valid_domain(domain: str) -> bool:
