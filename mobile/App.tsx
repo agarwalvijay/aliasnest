@@ -87,6 +87,38 @@ type InboxMessage = Message & { mask_address: string };
 type ViewMode = "inbox" | "message" | "settings" | "register";
 
 const TOKEN_KEY = "aliasnest_token";
+const SNAPSHOT_KEY = "aliasnest_snapshot_v1";
+
+type BootstrapPayload = {
+  user: User;
+  masks: Mask[];
+  domains: Domain[];
+  inbox: { items: InboxMessage[] };
+};
+
+type Snapshot = {
+  user: User;
+  masks: Mask[];
+  domains: Domain[];
+  messages: InboxMessage[];
+  selectedMaskId: number | null;
+};
+
+async function readSnapshotAsync(): Promise<Snapshot | null> {
+  try {
+    const raw = await SecureStore.getItemAsync(SNAPSHOT_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as Snapshot;
+  } catch { return null; }
+}
+
+async function writeSnapshotAsync(snap: Snapshot): Promise<void> {
+  try { await SecureStore.setItemAsync(SNAPSHOT_KEY, JSON.stringify(snap)); } catch { /* ignore */ }
+}
+
+async function clearSnapshotAsync(): Promise<void> {
+  try { await SecureStore.deleteItemAsync(SNAPSHOT_KEY); } catch { /* ignore */ }
+}
 const AVATAR_COLORS = ["#2f80ed", "#f2994a", "#eb5757", "#9b51e0", "#27ae60", "#56ccf2", "#bb6bd9"];
 const TIMEZONE_OPTIONS = [
   "UTC",
@@ -328,6 +360,15 @@ export default function App() {
       try {
         const stored = await SecureStore.getItemAsync(TOKEN_KEY);
         if (stored) {
+          const snap = await readSnapshotAsync();
+          if (snap) {
+            setUser(snap.user);
+            setTimezoneInput(snap.user.timezone || "UTC");
+            setMasks(snap.masks);
+            setDomains(snap.domains);
+            setMessages(snap.messages);
+            setSelectedMaskId(snap.selectedMaskId);
+          }
           setToken(stored);
         }
       } finally {
@@ -370,22 +411,32 @@ export default function App() {
     setBusy(true);
     setError(null);
     try {
-      const me = await apiRequest<User>("/api/me", "GET", activeToken);
-      setUser(me);
-      if (!timezoneDropdownOpen) setTimezoneInput(me.timezone || "UTC");
+      const boot = await apiRequest<BootstrapPayload>("/api/bootstrap?inbox_limit=100", "GET", activeToken);
+      setUser(boot.user);
+      if (!timezoneDropdownOpen) setTimezoneInput(boot.user.timezone || "UTC");
 
-      const domainPayload = await apiRequest<{ items: Domain[] }>("/api/domains", "GET", activeToken);
-      setDomains(domainPayload.items);
-      const firstUsableDomain = domainPayload.items.find((d) => d.can_use_for_mask)?.name || "";
+      setDomains(boot.domains);
+      const firstUsableDomain = boot.domains.find((d) => d.can_use_for_mask)?.name || "";
       setNewMaskDomain((prev) => prev || firstUsableDomain);
 
-      const maskPayload = await apiRequest<{ items: Mask[] }>("/api/masks", "GET", activeToken);
-      const loadedMasks = maskPayload.items;
+      const loadedMasks = boot.masks;
       setMasks(loadedMasks);
 
       const nextMaskId = preferredMaskId && loadedMasks.some((m) => m.id === preferredMaskId) ? preferredMaskId : null;
       setSelectedMaskId(nextMaskId);
-      await loadInboxMessages(activeToken, nextMaskId, loadedMasks);
+      if (nextMaskId) {
+        await loadInboxMessages(activeToken, nextMaskId, loadedMasks);
+        return;
+      }
+      const inboxMessages = loadedMasks.length === 0 ? [] : boot.inbox.items;
+      setMessages(inboxMessages);
+      void writeSnapshotAsync({
+        user: boot.user,
+        masks: loadedMasks,
+        domains: boot.domains,
+        messages: inboxMessages.slice(0, 30),
+        selectedMaskId: null,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load account");
     } finally {
@@ -437,6 +488,7 @@ export default function App() {
       }
     }
     await SecureStore.deleteItemAsync(TOKEN_KEY);
+    await clearSnapshotAsync();
     setToken(null);
     setEmail("");
     setPassword("");

@@ -1094,6 +1094,72 @@ def api_list_inbox(
     return {"items": items}
 
 
+@app.get("/api/bootstrap")
+def api_bootstrap(
+    inbox_limit: int = 100,
+    user: User = Depends(require_api_user),
+    db: Session = Depends(get_db),
+):
+    tz_name = _safe_tz_name(user.timezone)
+
+    domains = db.scalars(
+        select(Domain)
+        .where(or_(Domain.is_default.is_(True), Domain.user_id == user.id))
+        .order_by(Domain.is_default.desc(), Domain.created_at.desc())
+    ).all()
+
+    masks = db.scalars(
+        select(Mask).where(Mask.user_id == user.id).order_by(Mask.created_at.desc())
+    ).all()
+
+    unread_rows = db.execute(
+        select(Message.mask_id, func.count(Message.id))
+        .join(Mask, Message.mask_id == Mask.id)
+        .where(
+            Mask.user_id == user.id,
+            Message.is_outbound.is_(False),
+            Message.is_read.is_(False),
+        )
+        .group_by(Message.mask_id)
+    ).all()
+    unread_counts = {mask_id: count for mask_id, count in unread_rows}
+
+    safe_limit = max(1, min(inbox_limit, 200))
+    inbox_rows = db.execute(
+        select(Message, Mask.local_part, Mask.domain)
+        .join(Mask, Message.mask_id == Mask.id)
+        .where(Mask.user_id == user.id)
+        .order_by(Message.received_at.desc())
+        .limit(safe_limit)
+    ).all()
+    inbox_items = []
+    for message, local_part, domain in inbox_rows:
+        payload = _message_to_api_payload(message, tz_name)
+        payload["mask_address"] = f"{local_part}@{domain}"
+        inbox_items.append(payload)
+
+    return {
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "timezone": tz_name,
+        },
+        "masks": [
+            {
+                "id": mask.id,
+                "address": f"{mask.local_part}@{mask.domain}",
+                "local_part": mask.local_part,
+                "domain": mask.domain,
+                "is_active": bool(mask.is_active),
+                "unread_count": int(unread_counts.get(mask.id, 0)),
+            }
+            for mask in masks
+        ],
+        "domains": [_domain_to_api_payload(domain) for domain in domains],
+        "inbox": {"items": inbox_items},
+    }
+
+
 def _api_get_message_for_user(message_id: int, user_id: int, db: Session) -> Message:
     message = db.scalar(
         select(Message)

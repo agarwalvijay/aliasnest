@@ -189,6 +189,38 @@ type Message = {
 type MessageDetail = Message & { body: string; body_html?: string };
 
 const TOKEN_KEY = "aliasnest_web_token";
+const SNAPSHOT_KEY = "aliasnest_web_snapshot_v1";
+
+type BootstrapPayload = {
+  user: User;
+  masks: Mask[];
+  domains: Domain[];
+  inbox: { items: Message[] };
+};
+
+type Snapshot = {
+  user: User;
+  masks: Mask[];
+  domains: Domain[];
+  messages: Message[];
+  selectedMaskId: number | null;
+};
+
+function readSnapshot(): Snapshot | null {
+  try {
+    const raw = localStorage.getItem(SNAPSHOT_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as Snapshot;
+  } catch { return null; }
+}
+
+function writeSnapshot(snap: Snapshot): void {
+  try { localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snap)); } catch { /* ignore */ }
+}
+
+function clearSnapshot(): void {
+  try { localStorage.removeItem(SNAPSHOT_KEY); } catch { /* ignore */ }
+}
 const TIMEZONE_OPTIONS = [
   "UTC","America/Chicago","America/New_York","America/Los_Angeles","America/Denver",
   "America/Phoenix","America/Anchorage","Pacific/Honolulu","Europe/London","Europe/Berlin",
@@ -197,6 +229,7 @@ const TIMEZONE_OPTIONS = [
 
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem(TOKEN_KEY));
+  const initialSnapshot = useMemo<Snapshot | null>(() => (token ? readSnapshot() : null), []);
   const [view, setView] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -207,11 +240,11 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const [user, setUser] = useState<User | null>(null);
-  const [masks, setMasks] = useState<Mask[]>([]);
-  const [domains, setDomains] = useState<Domain[]>([]);
-  const [selectedMaskId, setSelectedMaskId] = useState<number | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [user, setUser] = useState<User | null>(initialSnapshot?.user ?? null);
+  const [masks, setMasks] = useState<Mask[]>(initialSnapshot?.masks ?? []);
+  const [domains, setDomains] = useState<Domain[]>(initialSnapshot?.domains ?? []);
+  const [selectedMaskId, setSelectedMaskId] = useState<number | null>(initialSnapshot?.selectedMaskId ?? null);
+  const [messages, setMessages] = useState<Message[]>(initialSnapshot?.messages ?? []);
   const [selectedMessage, setSelectedMessage] = useState<MessageDetail | null>(null);
 
   const [showSettings, setShowSettings] = useState(false);
@@ -254,20 +287,30 @@ export default function App() {
     setBusy(true);
     setError(null);
     try {
-      const me = await apiRequest<User>("/api/me", "GET", activeToken);
-      setUser(me);
-      setTimezone(me.timezone || "UTC");
-      const maskPayload = await apiRequest<{ items: Mask[] }>("/api/masks", "GET", activeToken);
-      setMasks(maskPayload.items);
-      const domainPayload = await apiRequest<{ items: Domain[] }>("/api/domains", "GET", activeToken);
-      setDomains(domainPayload.items);
+      const boot = await apiRequest<BootstrapPayload>("/api/bootstrap?inbox_limit=100", "GET", activeToken);
+      setUser(boot.user);
+      setTimezone(boot.user.timezone || "UTC");
+      setMasks(boot.masks);
+      setDomains(boot.domains);
       if (!newMaskDomain) {
-        const first = domainPayload.items.find((d) => d.can_use_for_mask)?.name || "";
+        const first = boot.domains.find((d) => d.can_use_for_mask)?.name || "";
         setNewMaskDomain(first);
       }
-      const targetMask = preferredMask && maskPayload.items.some((m) => m.id === preferredMask) ? preferredMask : null;
+      const targetMask = preferredMask && boot.masks.some((m) => m.id === preferredMask) ? preferredMask : null;
       setSelectedMaskId(targetMask);
-      await loadMessages(activeToken, targetMask, maskPayload.items);
+      if (targetMask) {
+        await loadMessages(activeToken, targetMask, boot.masks);
+        return;
+      }
+      const inboxMessages = boot.masks.length === 0 ? [] : boot.inbox.items;
+      setMessages(inboxMessages);
+      writeSnapshot({
+        user: boot.user,
+        masks: boot.masks,
+        domains: boot.domains,
+        messages: inboxMessages,
+        selectedMaskId: null,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
     } finally {
@@ -304,6 +347,7 @@ export default function App() {
   async function logout() {
     if (token) { try { await apiRequest("/api/auth/logout", "POST", token); } catch { /* ignore */ } }
     localStorage.removeItem(TOKEN_KEY);
+    clearSnapshot();
     setToken(null); setUser(null); setMessages([]); setSelectedMessage(null);
     setReplyBody(""); setReplyMode("reply");
   }
