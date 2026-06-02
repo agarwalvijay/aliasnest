@@ -3,6 +3,7 @@ from email import policy
 from email.message import EmailMessage
 from email.parser import BytesParser
 from email.utils import getaddresses, parseaddr
+from html import escape as html_escape
 import logging
 import hashlib
 from pathlib import Path
@@ -229,7 +230,7 @@ def _send_reply_email(mask: Mask, target_emails: list[str], reply_body: str, in_
     return msg, sender, subject
 
 
-def _forward_metadata(message: Message) -> tuple[str, str, str, str, str]:
+def _forward_metadata(message: Message) -> tuple[str, str, str, str, str, str]:
     from_addr = message.from_addr or ""
     to_addr = message.to_addr or ""
     subject = message.subject or "(No Subject)"
@@ -244,12 +245,36 @@ def _forward_metadata(message: Message) -> tuple[str, str, str, str, str]:
             date_str = parsed.get("Date", "") or ""
     except Exception:
         pass
-    text_body, _ = _extract_message_bodies(message)
-    return from_addr, to_addr, subject, date_str, text_body
+    text_body, html_body = _extract_message_bodies(message)
+    return from_addr, to_addr, subject, date_str, text_body, html_body
+
+
+def _build_forward_html(intro: str, orig_from: str, orig_date: str, orig_subject: str, orig_to: str, orig_html: str) -> str:
+    parts = []
+    intro_stripped = intro.strip()
+    if intro_stripped:
+        parts.append(f"<div>{html_escape(intro_stripped).replace(chr(10), '<br>')}</div><br>")
+    header_lines = ["---------- Forwarded message ----------"]
+    if orig_from:
+        header_lines.append(f"<strong>From:</strong> {html_escape(orig_from)}")
+    if orig_date:
+        header_lines.append(f"<strong>Date:</strong> {html_escape(orig_date)}")
+    if orig_subject:
+        header_lines.append(f"<strong>Subject:</strong> {html_escape(orig_subject)}")
+    if orig_to:
+        header_lines.append(f"<strong>To:</strong> {html_escape(orig_to)}")
+    parts.append(
+        '<div style="color:#5f6368;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.5;'
+        'border-left:3px solid #e8eaed;padding:4px 0 4px 12px;margin:8px 0;">'
+        + "<br>".join(header_lines)
+        + "</div>"
+    )
+    parts.append(orig_html)
+    return "".join(parts)
 
 
 def _send_forward_email(mask: Mask, target_email: str, intro_body: str, original: Message) -> tuple[EmailMessage, str, str]:
-    orig_from, orig_to, orig_subject, orig_date, orig_text = _forward_metadata(original)
+    orig_from, orig_to, orig_subject, orig_date, orig_text, orig_html = _forward_metadata(original)
     subject = orig_subject.strip() if orig_subject else "(No Subject)"
     lower_subject = subject.lower()
     if not (lower_subject.startswith("fwd:") or lower_subject.startswith("fw:")):
@@ -266,21 +291,24 @@ def _send_forward_email(mask: Mask, target_email: str, intro_body: str, original
         forwarded_block_lines.append(f"To: {orig_to}")
     forwarded_block = "\n".join(forwarded_block_lines)
     intro = intro_body.strip()
-    body_parts = []
+    text_parts = []
     if intro:
-        body_parts.append(intro)
-        body_parts.append("")
-    body_parts.append(forwarded_block)
-    body_parts.append("")
-    body_parts.append(orig_text or "")
-    full_body = "\n".join(body_parts)
+        text_parts.append(intro)
+        text_parts.append("")
+    text_parts.append(forwarded_block)
+    text_parts.append("")
+    text_parts.append(orig_text or "")
+    full_text = "\n".join(text_parts)
 
     sender = f"{mask.local_part}@{mask.domain}"
     msg = EmailMessage()
     msg["From"] = f"{OUTBOUND_FROM_NAME} <{sender}>"
     msg["To"] = target_email
     msg["Subject"] = subject
-    msg.set_content(full_body)
+    msg.set_content(full_text)
+    if orig_html:
+        html_body = _build_forward_html(intro, orig_from, orig_date, orig_subject, orig_to, orig_html)
+        msg.add_alternative(html_body, subtype="html")
 
     with smtplib.SMTP(OUTBOUND_SMTP_HOST, OUTBOUND_SMTP_PORT, timeout=20) as smtp:
         if OUTBOUND_SMTP_STARTTLS:
