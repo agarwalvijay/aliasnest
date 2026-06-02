@@ -229,6 +229,67 @@ def _send_reply_email(mask: Mask, target_emails: list[str], reply_body: str, in_
     return msg, sender, subject
 
 
+def _forward_metadata(message: Message) -> tuple[str, str, str, str, str]:
+    from_addr = message.from_addr or ""
+    to_addr = message.to_addr or ""
+    subject = message.subject or "(No Subject)"
+    date_str = ""
+    try:
+        raw_path = Path(message.raw_path)
+        if raw_path.exists():
+            parsed = BytesParser(policy=policy.default).parsebytes(raw_path.read_bytes())
+            from_addr = parsed.get("From", "") or from_addr
+            to_addr = parsed.get("To", "") or to_addr
+            subject = parsed.get("Subject", "") or subject
+            date_str = parsed.get("Date", "") or ""
+    except Exception:
+        pass
+    text_body, _ = _extract_message_bodies(message)
+    return from_addr, to_addr, subject, date_str, text_body
+
+
+def _send_forward_email(mask: Mask, target_email: str, intro_body: str, original: Message) -> tuple[EmailMessage, str, str]:
+    orig_from, orig_to, orig_subject, orig_date, orig_text = _forward_metadata(original)
+    subject = orig_subject.strip() if orig_subject else "(No Subject)"
+    lower_subject = subject.lower()
+    if not (lower_subject.startswith("fwd:") or lower_subject.startswith("fw:")):
+        subject = f"Fwd: {subject}"
+
+    forwarded_block_lines = ["---------- Forwarded message ----------"]
+    if orig_from:
+        forwarded_block_lines.append(f"From: {orig_from}")
+    if orig_date:
+        forwarded_block_lines.append(f"Date: {orig_date}")
+    if orig_subject:
+        forwarded_block_lines.append(f"Subject: {orig_subject}")
+    if orig_to:
+        forwarded_block_lines.append(f"To: {orig_to}")
+    forwarded_block = "\n".join(forwarded_block_lines)
+    intro = intro_body.strip()
+    body_parts = []
+    if intro:
+        body_parts.append(intro)
+        body_parts.append("")
+    body_parts.append(forwarded_block)
+    body_parts.append("")
+    body_parts.append(orig_text or "")
+    full_body = "\n".join(body_parts)
+
+    sender = f"{mask.local_part}@{mask.domain}"
+    msg = EmailMessage()
+    msg["From"] = f"{OUTBOUND_FROM_NAME} <{sender}>"
+    msg["To"] = target_email
+    msg["Subject"] = subject
+    msg.set_content(full_body)
+
+    with smtplib.SMTP(OUTBOUND_SMTP_HOST, OUTBOUND_SMTP_PORT, timeout=20) as smtp:
+        if OUTBOUND_SMTP_STARTTLS:
+            smtp.starttls()
+        smtp.login(OUTBOUND_SMTP_USER, OUTBOUND_SMTP_PASS)
+        smtp.send_message(msg)
+    return msg, sender, subject
+
+
 def _ensure_default_domain():
     db = SessionLocal()
     try:
@@ -388,6 +449,11 @@ class ApiAddDomainRequest(BaseModel):
 class ApiReplyRequest(BaseModel):
     body: str
     reply_all: bool = False
+
+
+class ApiForwardRequest(BaseModel):
+    to: str
+    body: str = ""
 
 
 class ApiRegisterRequest(BaseModel):
@@ -1250,6 +1316,51 @@ def api_reply_message(
         to_addr=", ".join(target_emails)[:500],
         subject=sent_subject[:500],
         text_preview=cleaned_reply[:2000],
+        is_outbound=True,
+        is_read=True,
+        raw_path=outbound_raw_path.as_posix(),
+    )
+    db.add(outbound)
+    db.commit()
+    db.refresh(outbound)
+    return _message_to_api_payload(outbound, _safe_tz_name(user.timezone))
+
+
+@app.post("/api/messages/{message_id}/forward")
+def api_forward_message(
+    message_id: int,
+    payload: ApiForwardRequest,
+    user: User = Depends(require_api_user),
+    db: Session = Depends(get_db),
+):
+    message = _api_get_message_for_user(message_id, user.id, db)
+    mask = db.get(Mask, message.mask_id)
+    if not mask:
+        raise HTTPException(status_code=404, detail="Mask not found")
+    if not _can_send_from_domain(mask.domain):
+        raise HTTPException(status_code=400, detail=f"Forward not enabled for {mask.domain}")
+
+    _, target_email = parseaddr(payload.to or "")
+    target_email = target_email.strip().lower()
+    if not target_email or "@" not in target_email:
+        raise HTTPException(status_code=400, detail="A valid forward recipient is required")
+
+    try:
+        sent_msg, sender, sent_subject = _send_forward_email(mask, target_email, payload.body or "", message)
+    except Exception as exc:
+        logger.exception("API forward send failed. message_id=%s", message.id)
+        raise HTTPException(status_code=502, detail=f"Failed to send forward: {str(exc)}") from exc
+
+    MESSAGE_DIR.mkdir(parents=True, exist_ok=True)
+    outbound_raw_path = MESSAGE_DIR / f"{uuid.uuid4().hex}.eml"
+    outbound_raw_path.write_bytes(sent_msg.as_bytes())
+    preview_source = (payload.body or "").strip() or sent_subject
+    outbound = Message(
+        mask_id=mask.id,
+        from_addr=sender[:500],
+        to_addr=target_email[:500],
+        subject=sent_subject[:500],
+        text_preview=preview_source[:2000],
         is_outbound=True,
         is_read=True,
         raw_path=outbound_raw_path.as_posix(),

@@ -900,6 +900,22 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   color: #fff;
 }
 
+.reply-modal-to {
+  border: none;
+  outline: none;
+  border-bottom: 1px solid #e8eaed;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #202124;
+  background: #fff;
+}
+
+.reply-modal-hint {
+  color: #5f6368;
+  font-size: 12px;
+}
+
 .reply-modal-textarea {
   flex: 1;
   min-height: 240px;

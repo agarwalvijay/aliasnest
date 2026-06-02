@@ -77,6 +77,12 @@ const IconReplyAll = () => (
     <path d="M3 9.8H9" strokeWidth="1.6"/>
   </svg>
 );
+const IconForward = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 7L20 12L14 17"/>
+    <path d="M19 12H11C6.6 12 4 14.4 4 19"/>
+  </svg>
+);
 const IconMailRead = () => (
   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
     <rect x="4" y="6" width="16" height="12" rx="2.2"/>
@@ -253,8 +259,9 @@ export default function App() {
   const [newMaskLocal, setNewMaskLocal] = useState("");
   const [newMaskDomain, setNewMaskDomain] = useState("");
   const [replyBody, setReplyBody] = useState("");
-  const [replyMode, setReplyMode] = useState<"reply" | "reply_all">("reply");
+  const [replyMode, setReplyMode] = useState<"reply" | "reply_all" | "forward">("reply");
   const [showReplyModal, setShowReplyModal] = useState(false);
+  const [forwardTo, setForwardTo] = useState("");
 
   const totalUnread = useMemo(() => masks.reduce((s, m) => s + m.unread_count, 0), [masks]);
   const verifiedDomainNames = useMemo(() => domains.filter((d) => d.can_use_for_mask).map((d) => d.name), [domains]);
@@ -349,7 +356,7 @@ export default function App() {
     localStorage.removeItem(TOKEN_KEY);
     clearSnapshot();
     setToken(null); setUser(null); setMessages([]); setSelectedMessage(null);
-    setReplyBody(""); setReplyMode("reply");
+    setReplyBody(""); setReplyMode("reply"); setForwardTo("");
   }
 
   async function openMessage(messageId: number) {
@@ -358,6 +365,7 @@ export default function App() {
     setSelectedMessage(detail);
     setReplyBody("");
     setReplyMode("reply");
+    setForwardTo("");
     setShowReplyModal(false);
     if (!detail.is_outbound && !detail.is_read) {
       await apiRequest(`/api/messages/${detail.id}/mark-read`, "POST", token);
@@ -387,17 +395,26 @@ export default function App() {
   }
 
   async function sendReply() {
-    if (!token || !selectedMessage || selectedMessage.is_outbound) return;
-    const body = replyBody.trim();
-    if (!body) return;
-    await apiRequest(`/api/messages/${selectedMessage.id}/reply`, "POST", token, { body, reply_all: replyMode === "reply_all" });
+    if (!token || !selectedMessage) return;
+    if (replyMode === "forward") {
+      const to = forwardTo.trim();
+      if (!to) return;
+      await apiRequest(`/api/messages/${selectedMessage.id}/forward`, "POST", token, { to, body: replyBody });
+    } else {
+      if (selectedMessage.is_outbound) return;
+      const body = replyBody.trim();
+      if (!body) return;
+      await apiRequest(`/api/messages/${selectedMessage.id}/reply`, "POST", token, { body, reply_all: replyMode === "reply_all" });
+    }
     setReplyBody("");
+    setForwardTo("");
     setShowReplyModal(false);
     await hydrate(token, selectedMaskId);
   }
 
-  function openReply(mode: "reply" | "reply_all") {
+  function openReply(mode: "reply" | "reply_all" | "forward") {
     setReplyMode(mode);
+    if (mode !== "forward") setForwardTo("");
     setShowReplyModal(true);
   }
 
@@ -747,6 +764,9 @@ export default function App() {
                       </button>
                     </>
                   )}
+                  <button className="icon-btn" title="Forward" onClick={() => openReply("forward")}>
+                    <IconForward />
+                  </button>
                   <button className="icon-btn danger-icon" title="Delete" onClick={() => void deleteMessage()}>
                     <IconTrash />
                   </button>
@@ -796,25 +816,52 @@ export default function App() {
           <div className="reply-modal">
             <div className="reply-modal-head">
               <div className="reply-modal-title">
-                <span>{replyMode === "reply_all" ? "Reply all" : "Reply"}</span>
-                <span className="reply-modal-recipient">to {displayName(selectedMessage.from)}</span>
+                <span>{replyMode === "forward" ? "Forward" : replyMode === "reply_all" ? "Reply all" : "Reply"}</span>
+                {replyMode !== "forward" && (
+                  <span className="reply-modal-recipient">to {displayName(selectedMessage.from)}</span>
+                )}
               </div>
               <button className="icon-btn" onClick={() => setShowReplyModal(false)} title="Close">
                 <IconClose />
               </button>
             </div>
+            {replyMode === "forward" && (
+              <input
+                autoFocus
+                className="reply-modal-to"
+                value={forwardTo}
+                onChange={(e) => setForwardTo(e.target.value)}
+                placeholder="To: name@example.com"
+                type="email"
+                autoCapitalize="none"
+              />
+            )}
             <textarea
-              autoFocus
+              autoFocus={replyMode !== "forward"}
               className="reply-modal-textarea"
               value={replyBody}
               onChange={(e) => setReplyBody(e.target.value)}
-              placeholder={replyMode === "reply_all" ? "Reply to all…" : `Reply to ${displayName(selectedMessage.from)}…`}
+              placeholder={
+                replyMode === "forward"
+                  ? "Add a note (optional)…"
+                  : replyMode === "reply_all"
+                  ? "Reply to all…"
+                  : `Reply to ${displayName(selectedMessage.from)}…`
+              }
             />
             <div className="reply-modal-actions">
-              <button className="link-btn" onClick={() => setReplyMode(replyMode === "reply" ? "reply_all" : "reply")}>
-                {replyMode === "reply" ? "Switch to reply all" : "Switch to reply"}
-              </button>
-              <button className="send-btn" onClick={() => void sendReply()} disabled={!replyBody.trim()}>
+              {replyMode === "forward" ? (
+                <span className="reply-modal-hint">Original message will be quoted below.</span>
+              ) : (
+                <button className="link-btn" onClick={() => setReplyMode(replyMode === "reply" ? "reply_all" : "reply")}>
+                  {replyMode === "reply" ? "Switch to reply all" : "Switch to reply"}
+                </button>
+              )}
+              <button
+                className="send-btn"
+                onClick={() => void sendReply()}
+                disabled={replyMode === "forward" ? !forwardTo.trim() : !replyBody.trim()}
+              >
                 Send
               </button>
             </div>

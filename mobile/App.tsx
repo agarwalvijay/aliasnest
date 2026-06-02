@@ -300,6 +300,8 @@ export default function App() {
   const [showReplyComposer, setShowReplyComposer] = useState(false);
   const [replyDraft, setReplyDraft] = useState("");
   const [replyAllMode, setReplyAllMode] = useState(false);
+  const [forwardMode, setForwardMode] = useState(false);
+  const [forwardTo, setForwardTo] = useState("");
 
   const [newMaskLocalPart, setNewMaskLocalPart] = useState("");
   const [newMaskDomain, setNewMaskDomain] = useState("");
@@ -523,6 +525,8 @@ export default function App() {
       setShowReplyComposer(false);
       setReplyDraft("");
       setReplyAllMode(false);
+      setForwardMode(false);
+      setForwardTo("");
 
       if (!detail.is_outbound && !detail.is_read) {
         await apiRequest(`/api/messages/${messageId}/mark-read`, "POST", token);
@@ -593,10 +597,38 @@ export default function App() {
     setViewMode("inbox");
     setShowReplyComposer(false);
     setReplyDraft("");
+    setForwardMode(false);
+    setForwardTo("");
   }
 
   async function sendReply() {
     if (!token || !selectedMessage) return;
+    if (forwardMode) {
+      const to = forwardTo.trim();
+      if (!to) {
+        Alert.alert("Recipient required", "Enter who to forward this message to.");
+        return;
+      }
+      setBusy(true);
+      setError(null);
+      try {
+        await apiRequest(`/api/messages/${selectedMessage.id}/forward`, "POST", token, {
+          to,
+          body: replyDraft,
+        });
+        setReplyDraft("");
+        setForwardTo("");
+        setForwardMode(false);
+        setShowReplyComposer(false);
+        await refreshAccount(token, selectedMaskId);
+        Alert.alert("Forwarded", `Sent to ${to}.`);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Forward failed");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     const body = replyDraft.trim();
     if (!body) {
       Alert.alert("Reply required", "Please type a reply first.");
@@ -1017,28 +1049,43 @@ export default function App() {
                     <Text style={styles.detailMetaSub} numberOfLines={1}>to {emailOnly(selectedMessage.to)}</Text>
                     <Text style={styles.detailMetaSub}>{selectedMessage.received_at_local}</Text>
                   </View>
-                  {!selectedMessage.is_outbound ? (
-                    <View style={styles.inlineReplyIcons}>
-                      <TouchableOpacity
-                        style={styles.inlineReplyBtn}
-                        onPress={() => {
-                          setReplyAllMode(false);
-                          setShowReplyComposer(true);
-                        }}
-                      >
-                        <MaterialCommunityIcons name="reply-outline" size={19} color="#1a73e8" />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.inlineReplyBtn}
-                        onPress={() => {
-                          setReplyAllMode(true);
-                          setShowReplyComposer(true);
-                        }}
-                      >
-                        <MaterialCommunityIcons name="reply-all-outline" size={19} color="#1a73e8" />
-                      </TouchableOpacity>
-                    </View>
-                  ) : null}
+                  <View style={styles.inlineReplyIcons}>
+                    {!selectedMessage.is_outbound ? (
+                      <>
+                        <TouchableOpacity
+                          style={styles.inlineReplyBtn}
+                          onPress={() => {
+                            setReplyAllMode(false);
+                            setForwardMode(false);
+                            setShowReplyComposer(true);
+                          }}
+                        >
+                          <MaterialCommunityIcons name="reply-outline" size={19} color="#1a73e8" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.inlineReplyBtn}
+                          onPress={() => {
+                            setReplyAllMode(true);
+                            setForwardMode(false);
+                            setShowReplyComposer(true);
+                          }}
+                        >
+                          <MaterialCommunityIcons name="reply-all-outline" size={19} color="#1a73e8" />
+                        </TouchableOpacity>
+                      </>
+                    ) : null}
+                    <TouchableOpacity
+                      style={styles.inlineReplyBtn}
+                      onPress={() => {
+                        setForwardMode(true);
+                        setReplyAllMode(false);
+                        setReplyDraft("");
+                        setShowReplyComposer(true);
+                      }}
+                    >
+                      <MaterialCommunityIcons name="share-outline" size={19} color="#1a73e8" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
 
@@ -1052,20 +1099,37 @@ export default function App() {
 
               {showReplyComposer ? (
                 <View style={styles.replyComposerCard}>
-                  <Text style={styles.replyComposerTitle}>{replyAllMode ? "Reply all" : "Reply"}</Text>
+                  <Text style={styles.replyComposerTitle}>
+                    {forwardMode ? "Forward" : replyAllMode ? "Reply all" : "Reply"}
+                  </Text>
+                  {forwardMode ? (
+                    <TextInput
+                      value={forwardTo}
+                      onChangeText={setForwardTo}
+                      placeholder="To: name@example.com"
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      style={styles.replyToInput}
+                    />
+                  ) : null}
                   <TextInput
                     value={replyDraft}
                     onChangeText={setReplyDraft}
-                    placeholder="Write your reply..."
+                    placeholder={forwardMode ? "Add a note (optional)…" : "Write your reply..."}
                     multiline
                     style={styles.replyInput}
                   />
+                  {forwardMode ? (
+                    <Text style={styles.replyComposerHint}>Original message will be quoted below.</Text>
+                  ) : null}
                   <View style={styles.replyComposerActions}>
                     <TouchableOpacity
                       style={styles.secondaryBtn}
                       onPress={() => {
                         setShowReplyComposer(false);
                         setReplyDraft("");
+                        setForwardMode(false);
+                        setForwardTo("");
                       }}
                     >
                       <Text style={styles.secondaryBtnText}>Cancel</Text>
@@ -1742,6 +1806,20 @@ const styles = StyleSheet.create({
     minHeight: 84,
     textAlignVertical: "top",
     color: "#0f172a",
+  },
+  replyToInput: {
+    borderWidth: 1,
+    borderColor: "#cfd9e8",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 6,
+    color: "#0f172a",
+  },
+  replyComposerHint: {
+    color: "#5f6368",
+    fontSize: 11,
+    marginTop: 6,
   },
   replyComposerActions: {
     marginTop: 8,
