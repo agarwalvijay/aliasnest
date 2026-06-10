@@ -444,7 +444,10 @@ export default function App() {
 
   function addReplyFiles(list: FileList | null) {
     if (!list || list.length === 0) return;
-    setReplyFiles((prev) => [...prev, ...Array.from(list)]);
+    // Materialize the FileList now: the caller resets input.value right after,
+    // which empties the live FileList before a deferred state updater would read it.
+    const files = Array.from(list);
+    setReplyFiles((prev) => [...prev, ...files]);
   }
 
   function removeReplyFile(index: number) {
