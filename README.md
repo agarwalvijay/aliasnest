@@ -183,13 +183,26 @@ pm2 status
 pm2 logs aliasnest-api
 ```
 
-Update/restart after code change:
+Redeploy from GitHub (recommended):
+
+```bash
+cd /home/vagarwal/aliasnest
+./deploy/redeploy.sh            # deploy origin/main
+./deploy/redeploy.sh my-branch  # or deploy a specific branch
+```
+
+`deploy/redeploy.sh` hard-resets the checkout to `origin/<branch>`, reinstalls
+Python deps, rebuilds `web/dist`, and `pm2 restart`s the API. `.env`, the SQLite
+DB, and stored `.eml` files are gitignored, so they are left untouched.
+
+Equivalent manual steps:
 
 ```bash
 cd /home/vagarwal/aliasnest
 git pull
 source .venv/bin/activate
 pip install -r requirements.txt
+(cd web && npm ci && npm run build)
 pm2 restart aliasnest-api --update-env
 ```
 
