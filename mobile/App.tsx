@@ -22,6 +22,7 @@ import * as SecureStore from "expo-secure-store";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import * as Notifications from "expo-notifications";
+import * as DocumentPicker from "expo-document-picker";
 import { WebView } from "react-native-webview";
 
 Notifications.setNotificationHandler({
@@ -34,7 +35,7 @@ Notifications.setNotificationHandler({
   }),
 });
 
-import { apiRequest } from "./src/api";
+import { apiRequest, apiUpload } from "./src/api";
 
 type User = {
   id: number;
@@ -85,6 +86,15 @@ type MessageDetail = Message & { body: string; body_html?: string };
 type InboxMessage = Message & { mask_address: string };
 
 type ViewMode = "inbox" | "message" | "settings" | "register";
+
+type PickedFile = { uri: string; name: string; type: string; size?: number };
+
+function formatBytes(n?: number): string {
+  if (!n && n !== 0) return "";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 const TOKEN_KEY = "aliasnest_token";
 const SNAPSHOT_KEY = "aliasnest_snapshot_v1";
@@ -302,6 +312,7 @@ export default function App() {
   const [replyAllMode, setReplyAllMode] = useState(false);
   const [forwardMode, setForwardMode] = useState(false);
   const [forwardTo, setForwardTo] = useState("");
+  const [replyFiles, setReplyFiles] = useState<PickedFile[]>([]);
 
   const [newMaskLocalPart, setNewMaskLocalPart] = useState("");
   const [newMaskDomain, setNewMaskDomain] = useState("");
@@ -527,6 +538,7 @@ export default function App() {
       setReplyAllMode(false);
       setForwardMode(false);
       setForwardTo("");
+      setReplyFiles([]);
 
       if (!detail.is_outbound && !detail.is_read) {
         await apiRequest(`/api/messages/${messageId}/mark-read`, "POST", token);
@@ -599,6 +611,34 @@ export default function App() {
     setReplyDraft("");
     setForwardMode(false);
     setForwardTo("");
+    setReplyFiles([]);
+  }
+
+  async function pickAttachments() {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ multiple: true, copyToCacheDirectory: true });
+      if (result.canceled) return;
+      const picked: PickedFile[] = result.assets.map((a) => ({
+        uri: a.uri,
+        name: a.name || "attachment",
+        type: a.mimeType || "application/octet-stream",
+        size: a.size ?? undefined,
+      }));
+      setReplyFiles((prev) => [...prev, ...picked]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not pick file");
+    }
+  }
+
+  function removeReplyFile(index: number) {
+    setReplyFiles((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function appendAttachments(form: FormData) {
+    for (const file of replyFiles) {
+      // React Native FormData accepts a file descriptor object for uploads.
+      form.append("attachments", { uri: file.uri, name: file.name, type: file.type } as any);
+    }
   }
 
   async function sendReply() {
@@ -612,13 +652,15 @@ export default function App() {
       setBusy(true);
       setError(null);
       try {
-        await apiRequest(`/api/messages/${selectedMessage.id}/forward`, "POST", token, {
-          to,
-          body: replyDraft,
-        });
+        const form = new FormData();
+        form.append("to", to);
+        form.append("body", replyDraft);
+        appendAttachments(form);
+        await apiUpload(`/api/messages/${selectedMessage.id}/forward`, form, token);
         setReplyDraft("");
         setForwardTo("");
         setForwardMode(false);
+        setReplyFiles([]);
         setShowReplyComposer(false);
         await refreshAccount(token, selectedMaskId);
         Alert.alert("Forwarded", `Sent to ${to}.`);
@@ -630,18 +672,20 @@ export default function App() {
       return;
     }
     const body = replyDraft.trim();
-    if (!body) {
-      Alert.alert("Reply required", "Please type a reply first.");
+    if (!body && replyFiles.length === 0) {
+      Alert.alert("Reply required", "Please type a reply or attach a file first.");
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      await apiRequest(`/api/messages/${selectedMessage.id}/reply`, "POST", token, {
-        body,
-        reply_all: replyAllMode,
-      });
+      const form = new FormData();
+      form.append("body", body);
+      form.append("reply_all", replyAllMode ? "true" : "false");
+      appendAttachments(form);
+      await apiUpload(`/api/messages/${selectedMessage.id}/reply`, form, token);
       setReplyDraft("");
+      setReplyFiles([]);
       setShowReplyComposer(false);
       await refreshAccount(token, selectedMaskId);
       Alert.alert("Reply sent", replyAllMode ? "Sent to all recipients." : "Reply sent.");
@@ -1120,9 +1164,28 @@ export default function App() {
                     style={styles.replyInput}
                   />
                   {forwardMode ? (
-                    <Text style={styles.replyComposerHint}>Original message will be quoted below.</Text>
+                    <Text style={styles.replyComposerHint}>
+                      Original message{replyFiles.length === 0 ? " and its attachments" : ""} will be included below.
+                    </Text>
+                  ) : null}
+                  {replyFiles.length > 0 ? (
+                    <View style={styles.replyAttachmentList}>
+                      {replyFiles.map((file, i) => (
+                        <View key={`${file.uri}-${i}`} style={styles.replyAttachmentChip}>
+                          <MaterialCommunityIcons name="paperclip" size={14} color="#3c4043" />
+                          <Text style={styles.replyAttachmentName} numberOfLines={1}>{file.name}</Text>
+                          {file.size ? <Text style={styles.replyAttachmentSize}>{formatBytes(file.size)}</Text> : null}
+                          <TouchableOpacity onPress={() => removeReplyFile(i)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                            <MaterialCommunityIcons name="close" size={15} color="#80868b" />
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                    </View>
                   ) : null}
                   <View style={styles.replyComposerActions}>
+                    <TouchableOpacity style={styles.attachBtn} onPress={() => void pickAttachments()}>
+                      <MaterialCommunityIcons name="paperclip" size={20} color="#1a73e8" />
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.secondaryBtn}
                       onPress={() => {
@@ -1130,12 +1193,13 @@ export default function App() {
                         setReplyDraft("");
                         setForwardMode(false);
                         setForwardTo("");
+                        setReplyFiles([]);
                       }}
                     >
                       <Text style={styles.secondaryBtnText}>Cancel</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.primaryBtnSmall} onPress={() => void sendReply()}>
-                      <Text style={styles.primaryBtnText}>Send</Text>
+                    <TouchableOpacity style={styles.primaryBtnSmall} onPress={() => void sendReply()} disabled={busy}>
+                      <Text style={styles.primaryBtnText}>{busy ? "Sending…" : "Send"}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -1825,7 +1889,38 @@ const styles = StyleSheet.create({
     marginTop: 8,
     flexDirection: "row",
     justifyContent: "flex-end",
+    alignItems: "center",
     gap: 8,
+  },
+  attachBtn: {
+    marginRight: "auto",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  replyAttachmentList: {
+    marginTop: 8,
+    gap: 6,
+  },
+  replyAttachmentChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#f1f3f4",
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  replyAttachmentName: {
+    flex: 1,
+    color: "#3c4043",
+    fontSize: 12,
+  },
+  replyAttachmentSize: {
+    color: "#80868b",
+    fontSize: 11,
   },
   settingsScreen: {
     flex: 1,

@@ -958,6 +958,35 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 .send-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
+.reply-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 16px;
+  border-top: 1px solid #f1f3f4;
+}
+
+.reply-attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 6px 4px 10px;
+  background: #f1f3f4;
+  border-radius: 16px;
+  font-size: 12px;
+  color: #3c4043;
+}
+
+.reply-attachment-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+
+.reply-attachment-size { color: #80868b; }
+
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 1100px) {
   .main-area { grid-template-columns: 360px 1fr; }

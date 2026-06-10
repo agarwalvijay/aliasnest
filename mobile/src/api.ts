@@ -30,3 +30,32 @@ export async function apiRequest<T>(
 
   return (await res.json()) as T;
 }
+
+// Multipart upload for endpoints that accept file attachments.
+// Content-Type is intentionally omitted so fetch sets the multipart boundary.
+export async function apiUpload<T>(
+  path: string,
+  form: FormData,
+  token?: string,
+): Promise<T> {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: form,
+  });
+
+  if (!res.ok) {
+    let detail = "Request failed";
+    try {
+      const json = await res.json();
+      detail = json?.detail || detail;
+    } catch {
+      // no-op
+    }
+    throw new Error(detail);
+  }
+
+  return (await res.json()) as T;
+}

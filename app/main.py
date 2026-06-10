@@ -15,7 +15,7 @@ from typing import Optional
 import uuid
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import Depends, FastAPI, Form, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -29,6 +29,8 @@ from .auth import hash_password, verify_password
 from .config import (
     ALLOWED_SIGNUP_EMAILS,
     DEFAULT_DOMAIN,
+    MAX_ATTACHMENT_BYTES,
+    MAX_TOTAL_ATTACHMENT_BYTES,
     MESSAGE_DIR,
     MX_TARGET_HOST,
     OUTBOUND_ALLOWED_DOMAINS,
@@ -202,7 +204,68 @@ def _extract_message_bodies(message: Message) -> tuple[str, str]:
     return (text_body, html_body)
 
 
-def _send_reply_email(mask: Mask, target_emails: list[str], reply_body: str, in_reply_to: str, references: str, original_subject: str):
+# An outbound attachment as (filename, maintype, subtype, raw_bytes).
+Attachment = tuple[str, str, str, bytes]
+
+
+def _read_upload_attachments(uploads: Optional[list[UploadFile]]) -> list[Attachment]:
+    """Read uploaded files into memory, enforcing per-file and per-message size caps."""
+    result: list[Attachment] = []
+    total = 0
+    for upload in uploads or []:
+        if upload is None or not upload.filename:
+            continue
+        data = upload.file.read()
+        if not data:
+            continue
+        if len(data) > MAX_ATTACHMENT_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Attachment '{upload.filename}' exceeds the {MAX_ATTACHMENT_BYTES // (1024 * 1024)}MB per-file limit",
+            )
+        total += len(data)
+        if total > MAX_TOTAL_ATTACHMENT_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Attachments exceed the {MAX_TOTAL_ATTACHMENT_BYTES // (1024 * 1024)}MB total limit",
+            )
+        ctype = (upload.content_type or "application/octet-stream").strip()
+        maintype, _, subtype = ctype.partition("/")
+        result.append((upload.filename, maintype or "application", subtype or "octet-stream", data))
+    return result
+
+
+def _extract_original_attachments(message: Message) -> list[Attachment]:
+    """Pull the attachment parts (disposition=attachment) out of a stored message."""
+    result: list[Attachment] = []
+    try:
+        raw_path = Path(message.raw_path)
+        if not raw_path.exists():
+            return result
+        parsed = BytesParser(policy=policy.default).parsebytes(raw_path.read_bytes())
+        for part in parsed.walk():
+            if part.get_content_maintype() == "multipart":
+                continue
+            if part.get_content_disposition() != "attachment":
+                continue
+            payload = part.get_payload(decode=True)
+            if not payload:
+                continue
+            filename = part.get_filename() or "attachment"
+            result.append(
+                (filename, part.get_content_maintype() or "application", part.get_content_subtype() or "octet-stream", payload)
+            )
+    except Exception:
+        logger.exception("Failed to extract original attachments. message_id=%s", getattr(message, "id", None))
+    return result
+
+
+def _attach_files(msg: EmailMessage, attachments: list[Attachment]) -> None:
+    for filename, maintype, subtype, data in attachments:
+        msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=filename)
+
+
+def _send_reply_email(mask: Mask, target_emails: list[str], reply_body: str, in_reply_to: str, references: str, original_subject: str, attachments: Optional[list[Attachment]] = None):
     subject = original_subject.strip() if original_subject else "(No Subject)"
     if not subject.lower().startswith("re:"):
         subject = f"Re: {subject}"
@@ -221,6 +284,7 @@ def _send_reply_email(mask: Mask, target_emails: list[str], reply_body: str, in_
     elif references:
         msg["References"] = references
     msg.set_content(reply_body)
+    _attach_files(msg, attachments or [])
 
     with smtplib.SMTP(OUTBOUND_SMTP_HOST, OUTBOUND_SMTP_PORT, timeout=20) as smtp:
         if OUTBOUND_SMTP_STARTTLS:
@@ -273,7 +337,7 @@ def _build_forward_html(intro: str, orig_from: str, orig_date: str, orig_subject
     return "".join(parts)
 
 
-def _send_forward_email(mask: Mask, target_email: str, intro_body: str, original: Message) -> tuple[EmailMessage, str, str]:
+def _send_forward_email(mask: Mask, target_email: str, intro_body: str, original: Message, new_attachments: Optional[list[Attachment]] = None) -> tuple[EmailMessage, str, str]:
     orig_from, orig_to, orig_subject, orig_date, orig_text, orig_html = _forward_metadata(original)
     subject = orig_subject.strip() if orig_subject else "(No Subject)"
     lower_subject = subject.lower()
@@ -309,6 +373,10 @@ def _send_forward_email(mask: Mask, target_email: str, intro_body: str, original
     if orig_html:
         html_body = _build_forward_html(intro, orig_from, orig_date, orig_subject, orig_to, orig_html)
         msg.add_alternative(html_body, subtype="html")
+
+    # Carry the original message's attachments, then any new files the user added.
+    _attach_files(msg, _extract_original_attachments(original))
+    _attach_files(msg, new_attachments or [])
 
     with smtplib.SMTP(OUTBOUND_SMTP_HOST, OUTBOUND_SMTP_PORT, timeout=20) as smtp:
         if OUTBOUND_SMTP_STARTTLS:
@@ -472,16 +540,6 @@ class ApiCreateMaskRequest(BaseModel):
 
 class ApiAddDomainRequest(BaseModel):
     domain_name: str
-
-
-class ApiReplyRequest(BaseModel):
-    body: str
-    reply_all: bool = False
-
-
-class ApiForwardRequest(BaseModel):
-    to: str
-    body: str = ""
 
 
 class ApiRegisterRequest(BaseModel):
@@ -1309,7 +1367,9 @@ def api_delete_message(message_id: int, user: User = Depends(require_api_user), 
 @app.post("/api/messages/{message_id}/reply")
 def api_reply_message(
     message_id: int,
-    payload: ApiReplyRequest,
+    body: str = Form(...),
+    reply_all: bool = Form(False),
+    attachments: list[UploadFile] = File(default=[]),
     user: User = Depends(require_api_user),
     db: Session = Depends(get_db),
 ):
@@ -1321,16 +1381,17 @@ def api_reply_message(
         raise HTTPException(status_code=404, detail="Mask not found")
     if not _can_send_from_domain(mask.domain):
         raise HTTPException(status_code=400, detail=f"Reply not enabled for {mask.domain}")
-    cleaned_reply = payload.body.strip()
-    if not cleaned_reply:
+    cleaned_reply = body.strip()
+    file_attachments = _read_upload_attachments(attachments)
+    if not cleaned_reply and not file_attachments:
         raise HTTPException(status_code=400, detail="Reply body cannot be empty")
 
     target_email, in_reply_to, references, original_subject, to_cc_addresses = _reply_metadata(message)
-    target_emails = _compute_reply_targets(mask, target_email, to_cc_addresses, payload.reply_all)
+    target_emails = _compute_reply_targets(mask, target_email, to_cc_addresses, reply_all)
     if not target_emails:
         raise HTTPException(status_code=400, detail="No valid reply recipient found")
     try:
-        sent_msg, sender, sent_subject = _send_reply_email(mask, target_emails, cleaned_reply, in_reply_to, references, original_subject)
+        sent_msg, sender, sent_subject = _send_reply_email(mask, target_emails, cleaned_reply, in_reply_to, references, original_subject, file_attachments)
     except Exception as exc:
         logger.exception("API reply send failed. message_id=%s", message.id)
         raise HTTPException(status_code=502, detail=f"Failed to send reply: {str(exc)}") from exc
@@ -1357,7 +1418,9 @@ def api_reply_message(
 @app.post("/api/messages/{message_id}/forward")
 def api_forward_message(
     message_id: int,
-    payload: ApiForwardRequest,
+    to: str = Form(...),
+    body: str = Form(""),
+    attachments: list[UploadFile] = File(default=[]),
     user: User = Depends(require_api_user),
     db: Session = Depends(get_db),
 ):
@@ -1368,13 +1431,14 @@ def api_forward_message(
     if not _can_send_from_domain(mask.domain):
         raise HTTPException(status_code=400, detail=f"Forward not enabled for {mask.domain}")
 
-    _, target_email = parseaddr(payload.to or "")
+    _, target_email = parseaddr(to or "")
     target_email = target_email.strip().lower()
     if not target_email or "@" not in target_email:
         raise HTTPException(status_code=400, detail="A valid forward recipient is required")
 
+    file_attachments = _read_upload_attachments(attachments)
     try:
-        sent_msg, sender, sent_subject = _send_forward_email(mask, target_email, payload.body or "", message)
+        sent_msg, sender, sent_subject = _send_forward_email(mask, target_email, body or "", message, file_attachments)
     except Exception as exc:
         logger.exception("API forward send failed. message_id=%s", message.id)
         raise HTTPException(status_code=502, detail=f"Failed to send forward: {str(exc)}") from exc
@@ -1382,7 +1446,7 @@ def api_forward_message(
     MESSAGE_DIR.mkdir(parents=True, exist_ok=True)
     outbound_raw_path = MESSAGE_DIR / f"{uuid.uuid4().hex}.eml"
     outbound_raw_path.write_bytes(sent_msg.as_bytes())
-    preview_source = (payload.body or "").strip() or sent_subject
+    preview_source = (body or "").strip() or sent_subject
     outbound = Message(
         mask_id=mask.id,
         from_addr=sender[:500],

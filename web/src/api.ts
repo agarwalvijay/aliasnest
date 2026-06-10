@@ -31,3 +31,32 @@ export async function apiRequest<T>(
 
   return (await res.json()) as T;
 }
+
+// Like apiRequest, but sends multipart/form-data (for endpoints that accept file uploads).
+// Do NOT set Content-Type manually — the browser adds the multipart boundary.
+export async function apiUpload<T>(
+  path: string,
+  form: FormData,
+  token?: string,
+): Promise<T> {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: form,
+  });
+
+  if (!res.ok) {
+    let detail = "Request failed";
+    try {
+      const json = await res.json();
+      detail = json?.detail || detail;
+    } catch {
+      // ignore
+    }
+    throw new Error(detail);
+  }
+
+  return (await res.json()) as T;
+}

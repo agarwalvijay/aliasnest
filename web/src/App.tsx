@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { apiRequest } from "./api";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { apiRequest, apiUpload } from "./api";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function displayName(addr: string): string {
@@ -63,6 +63,17 @@ const IconClose = () => (
     <line x1="6" y1="6" x2="18" y2="18"/>
   </svg>
 );
+const IconPaperclip = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+  </svg>
+);
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
 const IconReply = () => (
   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M10 7L4 12L10 17"/>
@@ -262,6 +273,9 @@ export default function App() {
   const [replyMode, setReplyMode] = useState<"reply" | "reply_all" | "forward">("reply");
   const [showReplyModal, setShowReplyModal] = useState(false);
   const [forwardTo, setForwardTo] = useState("");
+  const [replyFiles, setReplyFiles] = useState<File[]>([]);
+  const [sending, setSending] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const totalUnread = useMemo(() => masks.reduce((s, m) => s + m.unread_count, 0), [masks]);
   const verifiedDomainNames = useMemo(() => domains.filter((d) => d.can_use_for_mask).map((d) => d.name), [domains]);
@@ -356,7 +370,7 @@ export default function App() {
     localStorage.removeItem(TOKEN_KEY);
     clearSnapshot();
     setToken(null); setUser(null); setMessages([]); setSelectedMessage(null);
-    setReplyBody(""); setReplyMode("reply"); setForwardTo("");
+    setReplyBody(""); setReplyMode("reply"); setForwardTo(""); setReplyFiles([]);
   }
 
   async function openMessage(messageId: number) {
@@ -366,6 +380,7 @@ export default function App() {
     setReplyBody("");
     setReplyMode("reply");
     setForwardTo("");
+    setReplyFiles([]);
     setShowReplyModal(false);
     if (!detail.is_outbound && !detail.is_read) {
       await apiRequest(`/api/messages/${detail.id}/mark-read`, "POST", token);
@@ -395,26 +410,51 @@ export default function App() {
   }
 
   async function sendReply() {
-    if (!token || !selectedMessage) return;
+    if (!token || !selectedMessage || sending) return;
+    const form = new FormData();
     if (replyMode === "forward") {
       const to = forwardTo.trim();
       if (!to) return;
-      await apiRequest(`/api/messages/${selectedMessage.id}/forward`, "POST", token, { to, body: replyBody });
+      form.append("to", to);
+      form.append("body", replyBody);
     } else {
       if (selectedMessage.is_outbound) return;
       const body = replyBody.trim();
-      if (!body) return;
-      await apiRequest(`/api/messages/${selectedMessage.id}/reply`, "POST", token, { body, reply_all: replyMode === "reply_all" });
+      if (!body && replyFiles.length === 0) return;
+      form.append("body", body);
+      form.append("reply_all", replyMode === "reply_all" ? "true" : "false");
+    }
+    for (const file of replyFiles) form.append("attachments", file, file.name);
+    const endpoint = replyMode === "forward" ? "forward" : "reply";
+    setSending(true);
+    try {
+      await apiUpload(`/api/messages/${selectedMessage.id}/${endpoint}`, form, token);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Send failed");
+      return;
+    } finally {
+      setSending(false);
     }
     setReplyBody("");
     setForwardTo("");
+    setReplyFiles([]);
     setShowReplyModal(false);
     await hydrate(token, selectedMaskId);
+  }
+
+  function addReplyFiles(list: FileList | null) {
+    if (!list || list.length === 0) return;
+    setReplyFiles((prev) => [...prev, ...Array.from(list)]);
+  }
+
+  function removeReplyFile(index: number) {
+    setReplyFiles((prev) => prev.filter((_, i) => i !== index));
   }
 
   function openReply(mode: "reply" | "reply_all" | "forward") {
     setReplyMode(mode);
     if (mode !== "forward") setForwardTo("");
+    setReplyFiles([]);
     setShowReplyModal(true);
   }
 
@@ -849,9 +889,33 @@ export default function App() {
                   : `Reply to ${displayName(selectedMessage.from)}…`
               }
             />
+            {replyFiles.length > 0 && (
+              <div className="reply-attachments">
+                {replyFiles.map((file, i) => (
+                  <span key={i} className="reply-attachment-chip">
+                    <IconPaperclip />
+                    <span className="reply-attachment-name">{file.name}</span>
+                    <span className="reply-attachment-size">{formatBytes(file.size)}</span>
+                    <button className="icon-btn" title="Remove" onClick={() => removeReplyFile(i)}>
+                      <IconClose />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              style={{ display: "none" }}
+              onChange={(e) => { addReplyFiles(e.target.files); e.target.value = ""; }}
+            />
             <div className="reply-modal-actions">
+              <button className="icon-btn" title="Attach files" onClick={() => fileInputRef.current?.click()}>
+                <IconPaperclip />
+              </button>
               {replyMode === "forward" ? (
-                <span className="reply-modal-hint">Original message will be quoted below.</span>
+                <span className="reply-modal-hint">Original message{replyFiles.length === 0 ? " and its attachments" : ""} will be included below.</span>
               ) : (
                 <button className="link-btn" onClick={() => setReplyMode(replyMode === "reply" ? "reply_all" : "reply")}>
                   {replyMode === "reply" ? "Switch to reply all" : "Switch to reply"}
@@ -860,9 +924,14 @@ export default function App() {
               <button
                 className="send-btn"
                 onClick={() => void sendReply()}
-                disabled={replyMode === "forward" ? !forwardTo.trim() : !replyBody.trim()}
+                disabled={
+                  sending ||
+                  (replyMode === "forward"
+                    ? !forwardTo.trim()
+                    : !replyBody.trim() && replyFiles.length === 0)
+                }
               >
-                Send
+                {sending ? "Sending…" : "Send"}
               </button>
             </div>
           </div>
