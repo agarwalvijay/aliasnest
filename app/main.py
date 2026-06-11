@@ -40,6 +40,11 @@ from .config import (
     OUTBOUND_SMTP_PORT,
     OUTBOUND_SMTP_STARTTLS,
     OUTBOUND_SMTP_USER,
+    POP3_ENABLED,
+    POP3_HOST,
+    POP3_PORT,
+    POP3_TLS_CERT,
+    POP3_TLS_KEY,
     PUBLIC_SMTP_PORT,
     SECRET_KEY,
     SIGNUP_INVITE_CODE,
@@ -50,6 +55,7 @@ from .config import (
 from .database import Base, SessionLocal, engine, get_db
 from .models import ApiToken, Domain, Mask, Message, PushToken, User
 from .smtp_receiver import SMTPServerRuntime
+from .pop3_server import POP3ServerRuntime
 
 try:
     import dns.resolver
@@ -71,6 +77,15 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
 
 smtp_runtime = SMTPServerRuntime(SMTP_HOST, SMTP_PORT)
+pop3_runtime = (
+    POP3ServerRuntime(
+        POP3_HOST,
+        POP3_PORT,
+        POP3ServerRuntime.build_ssl_context(POP3_TLS_CERT, POP3_TLS_KEY),
+    )
+    if POP3_ENABLED
+    else None
+)
 
 
 def _normalize_domain(domain: str) -> str:
@@ -724,12 +739,16 @@ def startup_event():
     _ensure_message_unread_index()
     _ensure_default_domain()
     smtp_runtime.start()
+    if pop3_runtime:
+        pop3_runtime.start()
     threading.Thread(target=_backfill_message_metadata, name="preview-backfill", daemon=True).start()
 
 
 @app.on_event("shutdown")
 def shutdown_event():
     smtp_runtime.stop()
+    if pop3_runtime:
+        pop3_runtime.stop()
 
 
 def current_user(request: Request, db: Session = Depends(get_db)) -> Optional[User]:

@@ -34,3 +34,15 @@ OUTBOUND_ALLOWED_DOMAINS = {
     if domain.strip()
 }
 FIREBASE_SERVICE_ACCOUNT_PATH = os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH", "").strip()
+
+# POP3(S) gateway: lets standard mail clients (Gmail/Outlook/Apple Mail) pull
+# inbound mask mail. Read-only — serves the raw .eml each message already stores.
+POP3_ENABLED = os.getenv("POP3_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+POP3_HOST = os.getenv("POP3_HOST", "0.0.0.0")
+POP3_PORT = int(os.getenv("POP3_PORT", "995"))
+# Implicit-TLS cert/key (PEM). If unset, the server runs plaintext POP3 (port 110
+# style) — only acceptable for local testing; Gmail's fetcher requires TLS.
+POP3_TLS_CERT = os.getenv("POP3_TLS_CERT", "").strip()
+POP3_TLS_KEY = os.getenv("POP3_TLS_KEY", "").strip()
+# Cap how many recent inbound messages a session exposes, to bound STAT/LIST cost.
+POP3_MAX_MESSAGES = int(os.getenv("POP3_MAX_MESSAGES", "1000"))
