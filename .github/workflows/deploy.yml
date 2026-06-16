@@ -1,0 +1,40 @@
+name: Deploy AliasNest
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+# Avoid overlapping deploys to production.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # SSH_* are org-level secrets shared by every app on the GCP box, so there
+      # is nothing to declare per repo.
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          PORT="${{ secrets.SSH_PORT }}"; PORT="${PORT:-22}"
+          ssh-keyscan -p "$PORT" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      # Unlike the rsync-based Node deploys, aliasnest is Python and needs
+      # pip install + web build on the box. deploy/redeploy.sh does all of that
+      # (git reset -> pip -> web build -> pm2 restart) and hardcodes its own
+      # APP_DIR, so we just invoke it by absolute path — no DEPLOY_PATH needed.
+      - name: Redeploy on server
+        run: |
+          PORT="${{ secrets.SSH_PORT }}"; PORT="${PORT:-22}"
+          ssh -i ~/.ssh/id_deploy -p "$PORT" -o StrictHostKeyChecking=yes \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" bash -lc '
+              set -e
+              export NVM_DIR="$HOME/.nvm"
+              [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+              bash /home/vagarwal/aliasnest/deploy/redeploy.sh main
+            '

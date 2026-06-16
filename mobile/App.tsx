@@ -85,7 +85,7 @@ type MessageDetail = Message & { body: string; body_html?: string };
 
 type InboxMessage = Message & { mask_address: string };
 
-type ViewMode = "inbox" | "message" | "settings" | "register";
+type ViewMode = "inbox" | "message" | "settings" | "register" | "compose";
 
 type PickedFile = { uri: string; name: string; type: string; size?: number };
 
@@ -314,6 +314,16 @@ export default function App() {
   const [forwardTo, setForwardTo] = useState("");
   const [replyFiles, setReplyFiles] = useState<PickedFile[]>([]);
 
+  // Compose (new outbound email) state
+  const [composeFromMaskId, setComposeFromMaskId] = useState<number | null>(null);
+  const [composeFromDropdownOpen, setComposeFromDropdownOpen] = useState(false);
+  const [composeTo, setComposeTo] = useState("");
+  const [composeCc, setComposeCc] = useState("");
+  const [showComposeCc, setShowComposeCc] = useState(false);
+  const [composeSubject, setComposeSubject] = useState("");
+  const [composeBody, setComposeBody] = useState("");
+  const [composeFiles, setComposeFiles] = useState<PickedFile[]>([]);
+
   const [newMaskLocalPart, setNewMaskLocalPart] = useState("");
   const [newMaskDomain, setNewMaskDomain] = useState("");
   const [newDomain, setNewDomain] = useState("");
@@ -359,7 +369,7 @@ export default function App() {
         goBackToInbox();
         return true;
       }
-      if (viewMode === "settings") {
+      if (viewMode === "settings" || viewMode === "compose") {
         setViewMode("inbox");
         return true;
       }
@@ -638,6 +648,80 @@ export default function App() {
     for (const file of replyFiles) {
       // React Native FormData accepts a file descriptor object for uploads.
       form.append("attachments", { uri: file.uri, name: file.name, type: file.type } as any);
+    }
+  }
+
+  function openCompose() {
+    const fallback = masks.find((m) => m.is_active) ?? masks[0] ?? null;
+    const preferred = selectedMask?.is_active ? selectedMask : fallback;
+    if (!preferred) {
+      Alert.alert("No alias", "Create an alias first, then you can send mail from it.");
+      return;
+    }
+    setComposeFromMaskId(preferred.id);
+    setComposeFromDropdownOpen(false);
+    setComposeTo("");
+    setComposeCc("");
+    setShowComposeCc(false);
+    setComposeSubject("");
+    setComposeBody("");
+    setComposeFiles([]);
+    setDrawerOpen(false);
+    setError(null);
+    setViewMode("compose");
+  }
+
+  async function pickComposeAttachments() {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ multiple: true, copyToCacheDirectory: true });
+      if (result.canceled) return;
+      const picked: PickedFile[] = result.assets.map((a) => ({
+        uri: a.uri,
+        name: a.name || "attachment",
+        type: a.mimeType || "application/octet-stream",
+        size: a.size ?? undefined,
+      }));
+      setComposeFiles((prev) => [...prev, ...picked]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not pick file");
+    }
+  }
+
+  function removeComposeFile(index: number) {
+    setComposeFiles((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  async function sendCompose() {
+    if (!token || composeFromMaskId == null) return;
+    const to = composeTo.trim();
+    const body = composeBody.trim();
+    if (!to) {
+      Alert.alert("Recipient required", "Enter at least one recipient.");
+      return;
+    }
+    if (!body && composeFiles.length === 0) {
+      Alert.alert("Empty email", "Write a message or attach a file first.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append("to", to);
+      if (composeCc.trim()) form.append("cc", composeCc.trim());
+      form.append("subject", composeSubject);
+      form.append("body", body);
+      for (const file of composeFiles) {
+        form.append("attachments", { uri: file.uri, name: file.name, type: file.type } as any);
+      }
+      await apiUpload(`/api/masks/${composeFromMaskId}/compose`, form, token);
+      setViewMode("inbox");
+      await refreshAccount(token, selectedMaskId);
+      Alert.alert("Sent", `Email sent to ${to}.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Send failed");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -1035,6 +1119,20 @@ export default function App() {
             <View />
           </>
         ) : null}
+
+        {viewMode === "compose" ? (
+          <>
+            <View style={styles.headerLeft}>
+              <TouchableOpacity style={styles.iconButton} onPress={() => setViewMode("inbox")}>
+                <MaterialCommunityIcons name="arrow-left" size={22} color="#5f6368" />
+              </TouchableOpacity>
+              <Text style={styles.headerTitle}>New email</Text>
+            </View>
+            <TouchableOpacity style={styles.iconButton} onPress={() => void sendCompose()} disabled={busy}>
+              <MaterialCommunityIcons name="send" size={20} color="#1a73e8" />
+            </TouchableOpacity>
+          </>
+        ) : null}
       </View>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -1075,6 +1173,13 @@ export default function App() {
             );
           }}
         />
+      ) : null}
+
+      {viewMode === "inbox" && masks.length > 0 ? (
+        <TouchableOpacity style={styles.composeFab} onPress={openCompose} activeOpacity={0.85}>
+          <MaterialCommunityIcons name="pencil" size={22} color="#001d35" />
+          <Text style={styles.composeFabText}>Compose</Text>
+        </TouchableOpacity>
       ) : null}
 
       {viewMode === "message" ? (
@@ -1391,6 +1496,112 @@ export default function App() {
           <TouchableOpacity style={styles.logoutBtn} onPress={doLogout}>
             <Text style={styles.logoutBtnText}>Sign out</Text>
           </TouchableOpacity>
+        </ScrollView>
+        </KeyboardAvoidingView>
+      ) : null}
+
+      {viewMode === "compose" ? (
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ScrollView style={styles.composeScreen} contentContainerStyle={styles.composeContent} keyboardShouldPersistTaps="handled">
+          <Text style={styles.settingsLabel}>From</Text>
+          <TouchableOpacity
+            style={[styles.input, styles.dropdownInput]}
+            onPress={() => setComposeFromDropdownOpen((prev) => !prev)}
+          >
+            <Text style={styles.dropdownInputText} numberOfLines={1}>
+              {masks.find((m) => m.id === composeFromMaskId)?.address || "Select alias"}
+            </Text>
+            <MaterialCommunityIcons name={composeFromDropdownOpen ? "chevron-up" : "chevron-down"} size={18} color="#607089" />
+          </TouchableOpacity>
+          {composeFromDropdownOpen ? (
+            <View style={styles.dropdownList}>
+              <ScrollView style={styles.dropdownScroll} keyboardShouldPersistTaps="handled">
+                {masks.map((m) => (
+                  <TouchableOpacity
+                    key={m.id}
+                    style={[styles.dropdownOption, composeFromMaskId === m.id && styles.dropdownOptionActive]}
+                    onPress={() => {
+                      setComposeFromMaskId(m.id);
+                      setComposeFromDropdownOpen(false);
+                    }}
+                  >
+                    <Text style={[styles.dropdownOptionText, composeFromMaskId === m.id && styles.dropdownOptionTextActive]}>{m.address}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
+
+          <Text style={styles.settingsLabel}>To</Text>
+          <TextInput
+            value={composeTo}
+            onChangeText={setComposeTo}
+            placeholder="name@example.com, another@example.com"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={styles.input}
+          />
+
+          {showComposeCc ? (
+            <>
+              <Text style={styles.settingsLabel}>Cc</Text>
+              <TextInput
+                value={composeCc}
+                onChangeText={setComposeCc}
+                placeholder="cc@example.com"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={styles.input}
+              />
+            </>
+          ) : (
+            <TouchableOpacity onPress={() => setShowComposeCc(true)}>
+              <Text style={styles.composeCcToggle}>Add Cc</Text>
+            </TouchableOpacity>
+          )}
+
+          <Text style={styles.settingsLabel}>Subject</Text>
+          <TextInput
+            value={composeSubject}
+            onChangeText={setComposeSubject}
+            placeholder="Subject"
+            style={styles.input}
+          />
+
+          <Text style={styles.settingsLabel}>Message</Text>
+          <TextInput
+            value={composeBody}
+            onChangeText={setComposeBody}
+            placeholder="Write your message…"
+            multiline
+            style={[styles.replyInput, styles.composeBodyInput]}
+          />
+
+          {composeFiles.length > 0 ? (
+            <View style={styles.replyAttachmentList}>
+              {composeFiles.map((file, i) => (
+                <View key={`${file.uri}-${i}`} style={styles.replyAttachmentChip}>
+                  <MaterialCommunityIcons name="paperclip" size={14} color="#3c4043" />
+                  <Text style={styles.replyAttachmentName} numberOfLines={1}>{file.name}</Text>
+                  {file.size ? <Text style={styles.replyAttachmentSize}>{formatBytes(file.size)}</Text> : null}
+                  <TouchableOpacity onPress={() => removeComposeFile(i)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <MaterialCommunityIcons name="close" size={15} color="#80868b" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          <View style={styles.replyComposerActions}>
+            <TouchableOpacity style={styles.attachBtn} onPress={() => void pickComposeAttachments()}>
+              <MaterialCommunityIcons name="paperclip" size={20} color="#1a73e8" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.primaryBtnSmall} onPress={() => void sendCompose()} disabled={busy}>
+              <Text style={styles.primaryBtnText}>{busy ? "Sending…" : "Send"}</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
         </KeyboardAvoidingView>
       ) : null}
@@ -1926,6 +2137,45 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 12,
     paddingTop: 10,
+  },
+  composeScreen: {
+    flex: 1,
+    paddingHorizontal: 12,
+  },
+  composeContent: {
+    paddingTop: 12,
+    paddingBottom: 28,
+    gap: 10,
+  },
+  composeBodyInput: {
+    minHeight: 160,
+  },
+  composeCcToggle: {
+    color: "#1a73e8",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  composeFab: {
+    position: "absolute",
+    right: 18,
+    bottom: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 18,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: "#c2e7ff",
+    shadowColor: "#3c4043",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  composeFabText: {
+    color: "#001d35",
+    fontSize: 14,
+    fontWeight: "600",
   },
   settingsSectionTitle: {
     color: "#0f172a",

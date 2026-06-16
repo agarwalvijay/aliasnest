@@ -141,6 +141,12 @@ const IconCheck = () => (
     <polyline points="20 6 9 17 4 12"/>
   </svg>
 );
+const IconCompose = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 20h9"/>
+    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+  </svg>
+);
 // ── end icons ─────────────────────────────────────────────────────────────────
 
 // Sandboxed iframe renderer for HTML email bodies. Fills container, scrolls internally.
@@ -277,6 +283,18 @@ export default function App() {
   const [sending, setSending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Compose (new outbound email) state
+  const [showComposeModal, setShowComposeModal] = useState(false);
+  const [composeFromMaskId, setComposeFromMaskId] = useState<number | null>(null);
+  const [composeTo, setComposeTo] = useState("");
+  const [composeCc, setComposeCc] = useState("");
+  const [showComposeCc, setShowComposeCc] = useState(false);
+  const [composeSubject, setComposeSubject] = useState("");
+  const [composeBody, setComposeBody] = useState("");
+  const [composeFiles, setComposeFiles] = useState<File[]>([]);
+  const [composeSending, setComposeSending] = useState(false);
+  const composeFileInputRef = useRef<HTMLInputElement>(null);
+
   const totalUnread = useMemo(() => masks.reduce((s, m) => s + m.unread_count, 0), [masks]);
   const verifiedDomainNames = useMemo(() => domains.filter((d) => d.can_use_for_mask).map((d) => d.name), [domains]);
   const activeMask = useMemo(() => masks.find((m) => m.id === selectedMaskId) ?? null, [masks, selectedMaskId]);
@@ -289,7 +307,7 @@ export default function App() {
   // Close settings on Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { setShowSettings(false); setShowReplyModal(false); }
+      if (e.key === "Escape") { setShowSettings(false); setShowReplyModal(false); setShowComposeModal(false); }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -459,6 +477,55 @@ export default function App() {
     if (mode !== "forward") setForwardTo("");
     setReplyFiles([]);
     setShowReplyModal(true);
+  }
+
+  function openCompose() {
+    // Default the From mask to the active alias, else the first active alias.
+    const fallback = masks.find((m) => m.is_active) ?? masks[0] ?? null;
+    const preferred = activeMask?.is_active ? activeMask : fallback;
+    setComposeFromMaskId(preferred ? preferred.id : null);
+    setComposeTo("");
+    setComposeCc("");
+    setShowComposeCc(false);
+    setComposeSubject("");
+    setComposeBody("");
+    setComposeFiles([]);
+    setShowComposeModal(true);
+  }
+
+  function addComposeFiles(list: FileList | null) {
+    if (!list || list.length === 0) return;
+    const files = Array.from(list);
+    setComposeFiles((prev) => [...prev, ...files]);
+  }
+
+  function removeComposeFile(index: number) {
+    setComposeFiles((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  async function sendCompose() {
+    if (!token || composeSending || composeFromMaskId == null) return;
+    const to = composeTo.trim();
+    const body = composeBody.trim();
+    if (!to) return;
+    if (!body && composeFiles.length === 0) return;
+    const form = new FormData();
+    form.append("to", to);
+    if (composeCc.trim()) form.append("cc", composeCc.trim());
+    form.append("subject", composeSubject);
+    form.append("body", body);
+    for (const file of composeFiles) form.append("attachments", file, file.name);
+    setComposeSending(true);
+    try {
+      await apiUpload(`/api/masks/${composeFromMaskId}/compose`, form, token);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Send failed");
+      return;
+    } finally {
+      setComposeSending(false);
+    }
+    setShowComposeModal(false);
+    await hydrate(token, selectedMaskId);
   }
 
   async function copyToClipboard(value: string | null | undefined) {
@@ -699,6 +766,15 @@ export default function App() {
         {/* Sidebar */}
         <aside className="sidebar">
           <button
+            className="compose-btn"
+            onClick={openCompose}
+            disabled={masks.length === 0}
+            title={masks.length === 0 ? "Create an alias first" : "Compose new email"}
+          >
+            <IconCompose />
+            <span>Compose</span>
+          </button>
+          <button
             className={`sidebar-all${!selectedMaskId ? " active" : ""}`}
             onClick={() => { setSelectedMessage(null); token && void hydrate(token, null); }}
           >
@@ -935,6 +1011,106 @@ export default function App() {
                 }
               >
                 {sending ? "Sending…" : "Send"}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Compose modal */}
+      {showComposeModal && (
+        <>
+          <div className="settings-backdrop" onClick={() => setShowComposeModal(false)} />
+          <div className="reply-modal">
+            <div className="reply-modal-head">
+              <div className="reply-modal-title">
+                <span>New email</span>
+              </div>
+              <button className="icon-btn" onClick={() => setShowComposeModal(false)} title="Close">
+                <IconClose />
+              </button>
+            </div>
+            <div className="compose-from">
+              <span className="compose-from-label">From</span>
+              <select
+                value={composeFromMaskId ?? ""}
+                onChange={(e) => setComposeFromMaskId(e.target.value ? Number(e.target.value) : null)}
+              >
+                {masks.map((m) => (
+                  <option key={m.id} value={m.id}>{m.address}</option>
+                ))}
+              </select>
+            </div>
+            <input
+              autoFocus
+              className="reply-modal-to"
+              value={composeTo}
+              onChange={(e) => setComposeTo(e.target.value)}
+              placeholder="To: name@example.com, another@example.com"
+              type="text"
+              autoCapitalize="none"
+            />
+            {showComposeCc ? (
+              <input
+                className="reply-modal-to"
+                value={composeCc}
+                onChange={(e) => setComposeCc(e.target.value)}
+                placeholder="Cc: name@example.com"
+                type="text"
+                autoCapitalize="none"
+              />
+            ) : (
+              <button className="link-btn compose-cc-toggle" onClick={() => setShowComposeCc(true)}>Add Cc</button>
+            )}
+            <input
+              className="reply-modal-to"
+              value={composeSubject}
+              onChange={(e) => setComposeSubject(e.target.value)}
+              placeholder="Subject"
+              type="text"
+            />
+            <textarea
+              className="reply-modal-textarea"
+              value={composeBody}
+              onChange={(e) => setComposeBody(e.target.value)}
+              placeholder="Write your message…"
+            />
+            {composeFiles.length > 0 && (
+              <div className="reply-attachments">
+                {composeFiles.map((file, i) => (
+                  <span key={i} className="reply-attachment-chip">
+                    <IconPaperclip />
+                    <span className="reply-attachment-name">{file.name}</span>
+                    <span className="reply-attachment-size">{formatBytes(file.size)}</span>
+                    <button className="icon-btn" title="Remove" onClick={() => removeComposeFile(i)}>
+                      <IconClose />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <input
+              ref={composeFileInputRef}
+              type="file"
+              multiple
+              style={{ display: "none" }}
+              onChange={(e) => { addComposeFiles(e.target.files); e.target.value = ""; }}
+            />
+            <div className="reply-modal-actions">
+              <button className="icon-btn" title="Attach files" onClick={() => composeFileInputRef.current?.click()}>
+                <IconPaperclip />
+              </button>
+              <button
+                className="send-btn"
+                onClick={() => void sendCompose()}
+                disabled={
+                  composeSending ||
+                  composeFromMaskId == null ||
+                  !composeTo.trim() ||
+                  (!composeBody.trim() && composeFiles.length === 0)
+                }
+              >
+                {composeSending ? "Sending…" : "Send"}
               </button>
             </div>
           </div>

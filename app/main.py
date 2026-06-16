@@ -401,6 +401,41 @@ def _send_forward_email(mask: Mask, target_email: str, intro_body: str, original
     return msg, sender, subject
 
 
+def _parse_recipient_list(raw: str) -> list[str]:
+    """Parse a comma/semicolon-separated recipient string into deduped, validated addresses."""
+    if not raw:
+        return []
+    result: list[str] = []
+    seen = set()
+    for _, addr in getaddresses([raw.replace(";", ",")]):
+        addr = addr.strip().lower()
+        if not addr or "@" not in addr or addr in seen:
+            continue
+        seen.add(addr)
+        result.append(addr)
+    return result
+
+
+def _send_new_email(mask: Mask, to_emails: list[str], cc_emails: list[str], subject: str, body: str, attachments: Optional[list[Attachment]] = None) -> tuple[EmailMessage, str, str]:
+    clean_subject = subject.strip() if subject else "(No Subject)"
+    sender = f"{mask.local_part}@{mask.domain}"
+    msg = EmailMessage()
+    msg["From"] = f"{OUTBOUND_FROM_NAME} <{sender}>"
+    msg["To"] = ", ".join(to_emails)
+    if cc_emails:
+        msg["Cc"] = ", ".join(cc_emails)
+    msg["Subject"] = clean_subject
+    msg.set_content(body or "")
+    _attach_files(msg, attachments or [])
+
+    with smtplib.SMTP(OUTBOUND_SMTP_HOST, OUTBOUND_SMTP_PORT, timeout=20) as smtp:
+        if OUTBOUND_SMTP_STARTTLS:
+            smtp.starttls()
+        smtp.login(OUTBOUND_SMTP_USER, OUTBOUND_SMTP_PASS)
+        smtp.send_message(msg)
+    return msg, sender, clean_subject
+
+
 def _ensure_default_domain():
     db = SessionLocal()
     try:
@@ -1472,6 +1507,59 @@ def api_forward_message(
         to_addr=target_email[:500],
         subject=sent_subject[:500],
         text_preview=preview_source[:2000],
+        is_outbound=True,
+        is_read=True,
+        raw_path=outbound_raw_path.as_posix(),
+    )
+    db.add(outbound)
+    db.commit()
+    db.refresh(outbound)
+    return _message_to_api_payload(outbound, _safe_tz_name(user.timezone))
+
+
+@app.post("/api/masks/{mask_id}/compose")
+def api_compose_message(
+    mask_id: int,
+    to: str = Form(...),
+    cc: str = Form(""),
+    subject: str = Form(""),
+    body: str = Form(""),
+    attachments: list[UploadFile] = File(default=[]),
+    user: User = Depends(require_api_user),
+    db: Session = Depends(get_db),
+):
+    mask = db.scalar(select(Mask).where(Mask.id == mask_id, Mask.user_id == user.id))
+    if not mask:
+        raise HTTPException(status_code=404, detail="Mask not found")
+    if not _can_send_from_domain(mask.domain):
+        raise HTTPException(status_code=400, detail=f"Sending not enabled for {mask.domain}")
+
+    to_emails = _parse_recipient_list(to)
+    if not to_emails:
+        raise HTTPException(status_code=400, detail="At least one valid recipient is required")
+    cc_emails = [addr for addr in _parse_recipient_list(cc) if addr not in to_emails]
+
+    file_attachments = _read_upload_attachments(attachments)
+    cleaned_body = body.strip()
+    if not cleaned_body and not file_attachments:
+        raise HTTPException(status_code=400, detail="Email body cannot be empty")
+
+    try:
+        sent_msg, sender, sent_subject = _send_new_email(mask, to_emails, cc_emails, subject, cleaned_body, file_attachments)
+    except Exception as exc:
+        logger.exception("API compose send failed. mask_id=%s", mask_id)
+        raise HTTPException(status_code=502, detail=f"Failed to send email: {str(exc)}") from exc
+
+    MESSAGE_DIR.mkdir(parents=True, exist_ok=True)
+    outbound_raw_path = MESSAGE_DIR / f"{uuid.uuid4().hex}.eml"
+    outbound_raw_path.write_bytes(sent_msg.as_bytes())
+    all_recipients = to_emails + cc_emails
+    outbound = Message(
+        mask_id=mask.id,
+        from_addr=sender[:500],
+        to_addr=", ".join(all_recipients)[:500],
+        subject=sent_subject[:500],
+        text_preview=cleaned_body[:2000],
         is_outbound=True,
         is_read=True,
         raw_path=outbound_raw_path.as_posix(),
