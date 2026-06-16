@@ -48,6 +48,7 @@ type Mask = {
   address: string;
   local_part: string;
   domain: string;
+  display_name: string;
   is_active: boolean;
   unread_count: number;
 };
@@ -326,6 +327,9 @@ export default function App() {
 
   const [newMaskLocalPart, setNewMaskLocalPart] = useState("");
   const [newMaskDomain, setNewMaskDomain] = useState("");
+  const [newMaskName, setNewMaskName] = useState("");
+  const [editingNameMaskId, setEditingNameMaskId] = useState<number | null>(null);
+  const [editingNameValue, setEditingNameValue] = useState("");
   const [newDomain, setNewDomain] = useState("");
 
   const selectedMask = useMemo(() => masks.find((m) => m.id === selectedMaskId) || null, [masks, selectedMaskId]);
@@ -875,8 +879,10 @@ export default function App() {
       await apiRequest("/api/masks", "POST", token, {
         local_part: cleanLocal,
         domain_name: newMaskDomain,
+        display_name: newMaskName.trim(),
       });
       setNewMaskLocalPart("");
+      setNewMaskName("");
       await refreshAccount(token, selectedMaskId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create mask");
@@ -916,6 +922,24 @@ export default function App() {
       setMasks((prev) => prev.map((m) => m.id === maskId ? { ...m, is_active: isActive } : m));
     } catch (e) {
       Alert.alert("Error", e instanceof Error ? e.message : "Failed to update mask");
+    }
+  }
+
+  function startEditingName(mask: Mask) {
+    setEditingNameMaskId(mask.id);
+    setEditingNameValue(mask.display_name || "");
+  }
+
+  async function saveMaskName(maskId: number) {
+    if (!token) return;
+    const display_name = editingNameValue.trim();
+    try {
+      await apiRequest(`/api/masks/${maskId}`, "PATCH", token, { display_name });
+      setMasks((prev) => prev.map((m) => m.id === maskId ? { ...m, display_name } : m));
+      setEditingNameMaskId(null);
+      setEditingNameValue("");
+    } catch (e) {
+      Alert.alert("Error", e instanceof Error ? e.message : "Failed to update sender name");
     }
   }
 
@@ -1461,6 +1485,12 @@ export default function App() {
               <Text style={styles.secondaryBtnText}>Create</Text>
             </TouchableOpacity>
           </View>
+          <TextInput
+            value={newMaskName}
+            onChangeText={setNewMaskName}
+            style={[styles.input, { marginTop: 8 }]}
+            placeholder="Sender name (optional, e.g. Vijay Agarwal)"
+          />
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.domainPills}>
             {availableDomainNames.map((domainName) => (
@@ -1477,18 +1507,44 @@ export default function App() {
           <View style={styles.settingsList}>
             {masks.map((mask) => (
               <View key={mask.id} style={[styles.settingsRow, !mask.is_active && styles.settingsRowPaused]}>
-                <View style={styles.settingsRowMain}>
-                  <Text style={[styles.settingsRowTitle, !mask.is_active && styles.settingsRowTitlePaused]}>{mask.address}</Text>
-                  <Text style={styles.settingsRowSubtitle}>
-                    {mask.is_active ? `${mask.unread_count} unread` : "Paused — not accepting mail"}
-                  </Text>
-                </View>
-                <TouchableOpacity style={styles.pauseIconBtn} onPress={() => void toggleMask(mask.id, !mask.is_active)}>
-                  <MaterialCommunityIcons name={mask.is_active ? "pause-circle-outline" : "play-circle-outline"} size={20} color={mask.is_active ? "#607089" : "#27ae60"} />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.deleteIconBtn} onPress={() => void deleteMask(mask.id)}>
-                  <MaterialCommunityIcons name="trash-can-outline" size={16} color="#c4314b" />
-                </TouchableOpacity>
+                {editingNameMaskId === mask.id ? (
+                  <>
+                    <TextInput
+                      value={editingNameValue}
+                      onChangeText={setEditingNameValue}
+                      style={[styles.input, styles.settingsRowMain]}
+                      placeholder="Sender name (blank = bare address)"
+                      autoFocus
+                      onSubmitEditing={() => void saveMaskName(mask.id)}
+                    />
+                    <TouchableOpacity style={styles.pauseIconBtn} onPress={() => void saveMaskName(mask.id)}>
+                      <MaterialCommunityIcons name="check" size={20} color="#27ae60" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.deleteIconBtn} onPress={() => { setEditingNameMaskId(null); setEditingNameValue(""); }}>
+                      <MaterialCommunityIcons name="close" size={18} color="#607089" />
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.settingsRowMain}>
+                      <Text style={[styles.settingsRowTitle, !mask.is_active && styles.settingsRowTitlePaused]}>{mask.address}</Text>
+                      <Text style={styles.settingsRowSubtitle}>
+                        {mask.display_name
+                          ? `Sends as "${mask.display_name}"`
+                          : mask.is_active ? `${mask.unread_count} unread` : "Paused — not accepting mail"}
+                      </Text>
+                    </View>
+                    <TouchableOpacity style={styles.pauseIconBtn} onPress={() => startEditingName(mask)}>
+                      <MaterialCommunityIcons name="pencil-outline" size={18} color="#607089" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.pauseIconBtn} onPress={() => void toggleMask(mask.id, !mask.is_active)}>
+                      <MaterialCommunityIcons name={mask.is_active ? "pause-circle-outline" : "play-circle-outline"} size={20} color={mask.is_active ? "#607089" : "#27ae60"} />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.deleteIconBtn} onPress={() => void deleteMask(mask.id)}>
+                      <MaterialCommunityIcons name="trash-can-outline" size={16} color="#c4314b" />
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
             ))}
           </View>

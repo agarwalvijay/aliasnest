@@ -181,7 +181,7 @@ function HtmlBody({ html }: { html: string }) {
 }
 
 type User = { id: number; email: string; timezone: string };
-type Mask = { id: number; address: string; local_part: string; domain: string; is_active: boolean; unread_count: number };
+type Mask = { id: number; address: string; local_part: string; domain: string; display_name: string; is_active: boolean; unread_count: number };
 type Domain = {
   id: number;
   name: string;
@@ -275,6 +275,7 @@ export default function App() {
   const [newDomain, setNewDomain] = useState("");
   const [newMaskLocal, setNewMaskLocal] = useState("");
   const [newMaskDomain, setNewMaskDomain] = useState("");
+  const [newMaskName, setNewMaskName] = useState("");
   const [replyBody, setReplyBody] = useState("");
   const [replyMode, setReplyMode] = useState<"reply" | "reply_all" | "forward">("reply");
   const [showReplyModal, setShowReplyModal] = useState(false);
@@ -560,9 +561,23 @@ export default function App() {
 
   async function createMask() {
     if (!token || !newMaskLocal.trim() || !newMaskDomain) return;
-    await apiRequest("/api/masks", "POST", token, { local_part: newMaskLocal.trim().toLowerCase(), domain_name: newMaskDomain });
+    await apiRequest("/api/masks", "POST", token, {
+      local_part: newMaskLocal.trim().toLowerCase(),
+      domain_name: newMaskDomain,
+      display_name: newMaskName.trim(),
+    });
     setNewMaskLocal("");
+    setNewMaskName("");
     await hydrate(token, selectedMaskId);
+  }
+
+  async function renameMask(mask: Mask) {
+    if (!token) return;
+    const next = window.prompt(`Sender name for ${mask.address} (blank = send as the bare address):`, mask.display_name || "");
+    if (next === null) return;
+    const display_name = next.trim();
+    await apiRequest(`/api/masks/${mask.id}`, "PATCH", token, { display_name });
+    setMasks((prev) => prev.map((m) => m.id === mask.id ? { ...m, display_name } : m));
   }
 
   async function deleteMask(maskId: number) {
@@ -755,6 +770,13 @@ export default function App() {
                   </select>
                   <button className="icon-btn" title="Create mask" onClick={() => void createMask()}><IconPlus /></button>
                 </div>
+                <input
+                  className="mask-name-input"
+                  value={newMaskName}
+                  onChange={(e) => setNewMaskName(e.target.value)}
+                  placeholder="Sender name (optional, e.g. Vijay Agarwal)"
+                  onKeyDown={(e) => e.key === "Enter" && void createMask()}
+                />
               </div>
             </div>
           </div>
@@ -796,9 +818,12 @@ export default function App() {
                   void loadMessages(token, mask.id, masks);
                 }}
               >
-                <span className="mask-addr-text">{mask.address}</span>
+                <span className="mask-addr-text">{mask.display_name ? `${mask.display_name} · ${mask.address}` : mask.address}</span>
                 {!mask.is_active && <span className="mask-paused-badge">paused</span>}
                 {mask.is_active && mask.unread_count > 0 && <span className="sidebar-badge">{mask.unread_count}</span>}
+              </button>
+              <button className="mask-del-btn" onClick={() => void renameMask(mask)} title="Set sender name">
+                <IconCompose />
               </button>
               <button
                 className="mask-del-btn"

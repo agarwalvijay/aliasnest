@@ -24,7 +24,6 @@ OUTBOUND_SMTP_PORT = int(os.getenv("OUTBOUND_SMTP_PORT", "587"))
 OUTBOUND_SMTP_USER = os.getenv("OUTBOUND_SMTP_USER", "").strip()
 OUTBOUND_SMTP_PASS = os.getenv("OUTBOUND_SMTP_PASS", "").strip()
 OUTBOUND_SMTP_STARTTLS = os.getenv("OUTBOUND_SMTP_STARTTLS", "true").strip().lower() in {"1", "true", "yes", "on"}
-OUTBOUND_FROM_NAME = os.getenv("OUTBOUND_FROM_NAME", "AliasNest").strip()
 # Per-file and per-message caps for outbound attachments on replies/forwards.
 MAX_ATTACHMENT_BYTES = int(os.getenv("MAX_ATTACHMENT_BYTES", str(15 * 1024 * 1024)))
 MAX_TOTAL_ATTACHMENT_BYTES = int(os.getenv("MAX_TOTAL_ATTACHMENT_BYTES", str(20 * 1024 * 1024)))

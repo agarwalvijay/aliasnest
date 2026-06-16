@@ -2,7 +2,7 @@ from datetime import datetime
 from email import policy
 from email.message import EmailMessage
 from email.parser import BytesParser
-from email.utils import getaddresses, parseaddr
+from email.utils import formataddr, getaddresses, parseaddr
 from html import escape as html_escape
 import logging
 import hashlib
@@ -34,7 +34,6 @@ from .config import (
     MESSAGE_DIR,
     MX_TARGET_HOST,
     OUTBOUND_ALLOWED_DOMAINS,
-    OUTBOUND_FROM_NAME,
     OUTBOUND_SMTP_HOST,
     OUTBOUND_SMTP_PASS,
     OUTBOUND_SMTP_PORT,
@@ -137,6 +136,28 @@ def _can_send_from_domain(domain: str) -> bool:
     if "*" in OUTBOUND_ALLOWED_DOMAINS:
         return True
     return domain.strip().lower().rstrip(".") in OUTBOUND_ALLOWED_DOMAINS
+
+
+def _mask_from_header(mask: Mask) -> str:
+    """Build the outbound From value for a mask: its optional display name plus
+    address, or the bare address when no name is set."""
+    sender = f"{mask.local_part}@{mask.domain}"
+    name = (mask.display_name or "").strip()
+    return formataddr((name, sender)) if name else sender
+
+
+def _mask_payload(mask: Mask, unread_count: Optional[int] = None) -> dict:
+    data = {
+        "id": mask.id,
+        "address": f"{mask.local_part}@{mask.domain}",
+        "local_part": mask.local_part,
+        "domain": mask.domain,
+        "display_name": mask.display_name or "",
+        "is_active": bool(mask.is_active),
+    }
+    if unread_count is not None:
+        data["unread_count"] = int(unread_count)
+    return data
 
 
 def _reply_metadata(message: Message) -> tuple[str, str, str, str, list[str]]:
@@ -287,7 +308,7 @@ def _send_reply_email(mask: Mask, target_emails: list[str], reply_body: str, in_
 
     sender = f"{mask.local_part}@{mask.domain}"
     msg = EmailMessage()
-    msg["From"] = f"{OUTBOUND_FROM_NAME} <{sender}>"
+    msg["From"] = _mask_from_header(mask)
     msg["To"] = ", ".join(target_emails)
     msg["Subject"] = subject
     if in_reply_to:
@@ -381,7 +402,7 @@ def _send_forward_email(mask: Mask, target_email: str, intro_body: str, original
 
     sender = f"{mask.local_part}@{mask.domain}"
     msg = EmailMessage()
-    msg["From"] = f"{OUTBOUND_FROM_NAME} <{sender}>"
+    msg["From"] = _mask_from_header(mask)
     msg["To"] = target_email
     msg["Subject"] = subject
     msg.set_content(full_text)
@@ -420,7 +441,7 @@ def _send_new_email(mask: Mask, to_emails: list[str], cc_emails: list[str], subj
     clean_subject = subject.strip() if subject else "(No Subject)"
     sender = f"{mask.local_part}@{mask.domain}"
     msg = EmailMessage()
-    msg["From"] = f"{OUTBOUND_FROM_NAME} <{sender}>"
+    msg["From"] = _mask_from_header(mask)
     msg["To"] = ", ".join(to_emails)
     if cc_emails:
         msg["Cc"] = ", ".join(cc_emails)
@@ -586,6 +607,7 @@ class ApiTimezoneRequest(BaseModel):
 class ApiCreateMaskRequest(BaseModel):
     local_part: str
     domain_name: str
+    display_name: str = ""
 
 
 class ApiAddDomainRequest(BaseModel):
@@ -599,7 +621,8 @@ class ApiRegisterRequest(BaseModel):
 
 
 class ApiToggleMaskRequest(BaseModel):
-    is_active: bool
+    is_active: Optional[bool] = None
+    display_name: Optional[str] = None
 
 
 class ApiPushTokenRequest(BaseModel):
@@ -763,6 +786,18 @@ def _ensure_mask_is_active_column():
         db.close()
 
 
+def _ensure_mask_display_name_column():
+    db = SessionLocal()
+    try:
+        table_info = db.execute(text("PRAGMA table_info(masks)")).fetchall()
+        existing_columns = {row[1] for row in table_info}
+        if "display_name" not in existing_columns:
+            db.execute(text("ALTER TABLE masks ADD COLUMN display_name VARCHAR(255)"))
+            db.commit()
+    finally:
+        db.close()
+
+
 @app.on_event("startup")
 def startup_event():
     Base.metadata.create_all(bind=engine)
@@ -771,6 +806,7 @@ def startup_event():
     _ensure_message_read_column()
     _ensure_user_timezone_column()
     _ensure_mask_is_active_column()
+    _ensure_mask_display_name_column()
     _ensure_message_unread_index()
     _ensure_default_domain()
     smtp_runtime.start()
@@ -1023,17 +1059,7 @@ def api_list_masks(user: User = Depends(require_api_user), db: Session = Depends
     ).all()
     unread_counts = {mask_id: count for mask_id, count in unread_rows}
     return {
-        "items": [
-            {
-                "id": mask.id,
-                "address": f"{mask.local_part}@{mask.domain}",
-                "local_part": mask.local_part,
-                "domain": mask.domain,
-                "is_active": bool(mask.is_active),
-                "unread_count": int(unread_counts.get(mask.id, 0)),
-            }
-            for mask in masks
-        ]
+        "items": [_mask_payload(mask, unread_counts.get(mask.id, 0)) for mask in masks]
     }
 
 
@@ -1047,15 +1073,12 @@ def api_toggle_mask(
     mask = db.scalar(select(Mask).where(Mask.id == mask_id, Mask.user_id == user.id))
     if not mask:
         raise HTTPException(status_code=404, detail="Mask not found")
-    mask.is_active = payload.is_active
+    if payload.is_active is not None:
+        mask.is_active = payload.is_active
+    if payload.display_name is not None:
+        mask.display_name = payload.display_name.strip()[:255] or None
     db.commit()
-    return {
-        "id": mask.id,
-        "address": f"{mask.local_part}@{mask.domain}",
-        "local_part": mask.local_part,
-        "domain": mask.domain,
-        "is_active": bool(mask.is_active),
-    }
+    return _mask_payload(mask)
 
 
 @app.post("/api/push-token")
@@ -1202,16 +1225,11 @@ def api_create_mask(
     existing = db.scalar(select(Mask).where(Mask.local_part == clean_local, Mask.domain == clean_domain))
     if existing:
         if existing.user_id == user.id:
-            return {
-                "id": existing.id,
-                "address": f"{existing.local_part}@{existing.domain}",
-                "local_part": existing.local_part,
-                "domain": existing.domain,
-                "is_active": bool(existing.is_active),
-            }
+            return _mask_payload(existing)
         raise HTTPException(status_code=409, detail="Mask already exists")
 
-    mask = Mask(user_id=user.id, local_part=clean_local, domain=clean_domain)
+    display_name = payload.display_name.strip()[:255] or None
+    mask = Mask(user_id=user.id, local_part=clean_local, domain=clean_domain, display_name=display_name)
     db.add(mask)
     try:
         db.commit()
@@ -1219,13 +1237,7 @@ def api_create_mask(
         db.rollback()
         raise HTTPException(status_code=409, detail="Mask already exists")
     db.refresh(mask)
-    return {
-        "id": mask.id,
-        "address": f"{mask.local_part}@{mask.domain}",
-        "local_part": mask.local_part,
-        "domain": mask.domain,
-        "is_active": bool(mask.is_active),
-    }
+    return _mask_payload(mask)
 
 
 @app.delete("/api/masks/{mask_id}")
@@ -1267,12 +1279,7 @@ def api_list_mask_messages(
     ).all()
     tz_name = _safe_tz_name(user.timezone)
     return {
-        "mask": {
-            "id": mask.id,
-            "address": f"{mask.local_part}@{mask.domain}",
-            "domain": mask.domain,
-            "local_part": mask.local_part,
-        },
+        "mask": _mask_payload(mask),
         "items": [_message_to_api_payload(message, tz_name) for message in messages],
     }
 
@@ -1350,17 +1357,7 @@ def api_bootstrap(
             "email": user.email,
             "timezone": tz_name,
         },
-        "masks": [
-            {
-                "id": mask.id,
-                "address": f"{mask.local_part}@{mask.domain}",
-                "local_part": mask.local_part,
-                "domain": mask.domain,
-                "is_active": bool(mask.is_active),
-                "unread_count": int(unread_counts.get(mask.id, 0)),
-            }
-            for mask in masks
-        ],
+        "masks": [_mask_payload(mask, unread_counts.get(mask.id, 0)) for mask in masks],
         "domains": [_domain_to_api_payload(domain) for domain in domains],
         "inbox": {"items": inbox_items},
     }

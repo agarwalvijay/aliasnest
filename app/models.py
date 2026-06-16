@@ -44,6 +44,9 @@ class Mask(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     local_part: Mapped[str] = mapped_column(String(120), index=True)
     domain: Mapped[str] = mapped_column(String(255), index=True)
+    # Optional sender display name shown on outbound mail (From: "name" <addr>).
+    # Blank → mail goes out as the bare address.
+    display_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
