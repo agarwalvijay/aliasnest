@@ -284,10 +284,10 @@ a { color: var(--seal); }
   transition: background .12s, color .12s, transform .12s;
 }
 .top-icon:hover, .settings-btn:hover { background: var(--paper-2); color: var(--ink); }
-.settings-btn svg { width: 18px; height: 18px; transition: transform .35s cubic-bezier(.34,1.56,.64,1); }
-.settings-btn:hover svg { transform: rotate(45deg); }
-.settings-btn.active { color: var(--seal); }
-.settings-btn.active svg { transform: rotate(90deg); }
+.settings-btn svg { width: 18px; height: 18px; transition: transform .25s ease; }
+.settings-btn:hover svg { transform: scale(1.06); }
+.settings-btn.active { color: var(--seal); background: var(--seal-soft); }
+.settings-btn.active svg { transform: scale(1.06); }
 
 /* ── error bar ─────────────────────────────────────────────────────────── */
 .error-bar {
