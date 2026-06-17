@@ -1,0 +1,1210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>aliasnest · brand & interface proposal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://api.fontshare.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&family=Noto+Serif+JP:wght@600;900&display=swap" rel="stylesheet">
+<link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet">
+<style>
+/* ── tokens ─────────────────────────────────────────────────────────────── */
+:root{
+  --paper:      #F5F1EA;   /* washi ivory */
+  --paper-2:    #EFE9DF;   /* deeper tone for surfaces */
+  --paper-edge: #E5DDD0;
+  --ink:        #1A1815;   /* near-black, warm */
+  --ink-2:      #3D3A34;   /* secondary text */
+  --ink-3:      #7A7468;   /* tertiary */
+  --rule:       #D9D2C3;   /* hairlines */
+  --seal:       #C8463A;   /* hanko vermilion */
+  --seal-deep:  #A6362C;   /* pressed harder */
+  --seal-soft:  rgba(200,70,58,.10);
+  --serif:      "Newsreader", "Source Serif Pro", Georgia, serif;
+  --sans:       "General Sans", "Söhne", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:       "JetBrains Mono", "SF Mono", ui-monospace, monospace;
+  --jp:         "Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", serif;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:15px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+/* paper grain */
+body::before{
+  content:"";
+  position:fixed; inset:0;
+  pointer-events:none;
+  z-index:1;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .1  0 0 0 0 .09  0 0 0 0 .08  0 0 0 .06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  mix-blend-mode:multiply;
+  opacity:.55;
+}
+
+/* ── shared atoms ──────────────────────────────────────────────────────── */
+.seal{
+  display:inline-flex; align-items:center; justify-content:center;
+  background:var(--seal); color:#fff;
+  width:48px; height:48px; border-radius:6px;
+  font-family:var(--jp); font-weight:900;
+  position:relative;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.08), 0 0 0 1px rgba(166,54,44,.15);
+  transform: rotate(-3deg);
+}
+.seal::after{
+  /* worn edge / ink unevenness */
+  content:""; position:absolute; inset:0; border-radius:6px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.7' numOctaves='2'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .35 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  mix-blend-mode:screen; opacity:.6; pointer-events:none;
+}
+.seal-glyph{ position:relative; z-index:1; line-height:1; }
+.seal-sm{ width:22px; height:22px; border-radius:3px; }
+.seal-sm .seal-glyph{ font-size:14px; }
+.seal-md{ width:36px; height:36px; border-radius:4px; }
+.seal-md .seal-glyph{ font-size:22px; }
+.seal-lg{ width:120px; height:120px; border-radius:14px; }
+.seal-lg .seal-glyph{ font-size:78px; }
+
+.wordmark{
+  font-family:var(--serif);
+  font-style:italic;
+  font-weight:400;
+  letter-spacing:-0.02em;
+  color:var(--ink);
+}
+.wordmark-sm{ font-size:20px; line-height:1; }
+.wordmark-lg{ font-size:64px; line-height:.95; }
+
+.rule{ height:1px; background:var(--rule); border:0; }
+.eyebrow{
+  font-family:var(--mono); font-size:11px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--ink-3);
+}
+
+/* ── layout containers ─────────────────────────────────────────────────── */
+.page{ position:relative; z-index:2; }
+.wrap{ max-width:1180px; margin:0 auto; padding:0 32px; }
+
+section{ padding:96px 0; border-top:1px solid var(--rule); }
+section:first-child{ border-top:0; }
+
+h2.section-title{
+  font-family:var(--serif); font-weight:400;
+  font-size:36px; line-height:1.1; letter-spacing:-0.02em;
+  margin:0 0 8px;
+}
+h2.section-title em{ font-style:italic; color:var(--seal); }
+.section-lede{
+  font-family:var(--sans); color:var(--ink-2); max-width:62ch;
+  font-size:16px; margin:0 0 48px;
+}
+
+/* ── 1. hero ───────────────────────────────────────────────────────────── */
+.hero{
+  min-height:92vh;
+  display:grid; grid-template-rows: 1fr auto;
+  padding:48px 0 64px;
+  border-top:0;
+}
+.hero-nav{
+  display:flex; align-items:center; justify-content:space-between;
+  font-family:var(--mono); font-size:12px; color:var(--ink-3);
+  padding:0 32px;
+}
+.hero-nav a{ color:var(--ink-3); text-decoration:none; }
+.hero-nav .dot{ width:6px; height:6px; border-radius:50%; background:var(--seal); display:inline-block; }
+.hero-main{
+  display:grid; place-items:center; text-align:center;
+  position:relative;
+}
+.hero-stamp{ animation: press 1.6s cubic-bezier(.2,.7,.2,1) .2s both; }
+@keyframes press{
+  0%   { transform: translateY(-40px) rotate(-3deg) scale(1.08); opacity:0; filter: blur(2px); }
+  60%  { transform: translateY(2px)   rotate(-3deg) scale(1);    opacity:1; filter: blur(0); }
+  72%  { transform: translateY(0)     rotate(-3deg) scale(.97); }
+  100% { transform: translateY(0)     rotate(-3deg) scale(1); }
+}
+.hero-word{
+  margin-top:32px;
+  font-family:var(--serif); font-style:italic; font-weight:300;
+  font-size: clamp(72px, 11vw, 156px);
+  line-height:.9; letter-spacing:-0.035em;
+  animation: rise 1.2s ease-out .9s both;
+}
+@keyframes rise{ from{ transform:translateY(20px); opacity:0 } to{ transform:none; opacity:1 } }
+.hero-tag{
+  margin-top:28px;
+  display:inline-flex; gap:14px; align-items:center;
+  font-family:var(--mono); font-size:13px; color:var(--ink-3);
+  letter-spacing:.08em;
+  animation: rise 1s ease-out 1.4s both;
+}
+.hero-tag .bar{ width:36px; height:1px; background:var(--rule); }
+
+.hero-meta{
+  display:grid; grid-template-columns: repeat(3, 1fr);
+  gap:32px;
+  padding:0 32px;
+  font-family:var(--mono); font-size:11px; color:var(--ink-3);
+  letter-spacing:.1em; text-transform:uppercase;
+}
+.hero-meta div span{ display:block; color:var(--ink); font-family:var(--serif); font-style:italic; font-size:18px; letter-spacing:-0.01em; text-transform:none; margin-top:6px; }
+
+/* ── 2. system: color + type ───────────────────────────────────────────── */
+.sys{ display:grid; grid-template-columns: 1.1fr 1fr; gap:64px; }
+@media (max-width:920px){ .sys{ grid-template-columns:1fr; } }
+
+.palette{ display:grid; grid-template-columns: repeat(3, 1fr); gap:14px; }
+.swatch{
+  aspect-ratio: 1/1.15; border-radius:6px;
+  display:flex; flex-direction:column; justify-content:flex-end;
+  padding:14px; color:var(--ink);
+  border:1px solid var(--rule);
+}
+.swatch .name{ font-family:var(--serif); font-style:italic; font-size:18px; line-height:1; }
+.swatch .hex{ font-family:var(--mono); font-size:11px; color:var(--ink-3); margin-top:4px; }
+.sw-paper { background:var(--paper);    }
+.sw-paper2{ background:var(--paper-2);  }
+.sw-ink   { background:var(--ink);      color:var(--paper); }
+.sw-ink .hex{ color:#A29C8E; }
+.sw-ink2  { background:var(--ink-2);    color:var(--paper); }
+.sw-ink2 .hex{ color:#9C9484; }
+.sw-rule  { background:var(--rule);     }
+.sw-seal  { background:var(--seal);     color:#fff; }
+.sw-seal .hex{ color:#F5D8D3; }
+
+.type-stack > div{ margin-bottom:36px; padding-bottom:36px; border-bottom:1px solid var(--rule); }
+.type-stack > div:last-child{ border-bottom:0; }
+.type-eyebrow{ display:flex; gap:14px; align-items:baseline; }
+.type-eyebrow .role{ font-family:var(--mono); font-size:10px; letter-spacing:.18em; color:var(--ink-3); text-transform:uppercase; }
+.type-eyebrow .name{ font-family:var(--mono); font-size:11px; color:var(--ink-2); }
+.type-spec-serif{
+  font-family:var(--serif); font-style:italic; font-weight:300;
+  font-size:56px; line-height:1; letter-spacing:-0.02em; margin-top:10px;
+}
+.type-spec-sans{
+  font-family:var(--sans); font-weight:500;
+  font-size:34px; line-height:1.05; letter-spacing:-0.01em; margin-top:10px;
+}
+.type-spec-mono{
+  font-family:var(--mono); font-weight:500;
+  font-size:22px; margin-top:10px; color:var(--ink);
+}
+
+/* ── 3. web app frame ──────────────────────────────────────────────────── */
+.frame{
+  background:var(--paper);
+  border:1px solid var(--paper-edge);
+  border-radius:14px;
+  box-shadow: 0 1px 0 #fff inset, 0 30px 60px -30px rgba(26,24,21,.18), 0 12px 24px -16px rgba(26,24,21,.12);
+  overflow:hidden;
+}
+.browser{ aspect-ratio: 16/10.2; display:grid; grid-template-rows: auto 1fr; }
+.browser-bar{
+  display:flex; align-items:center; gap:10px;
+  padding:10px 14px;
+  background:#EBE5D8; border-bottom:1px solid var(--paper-edge);
+}
+.browser-bar .dots{ display:flex; gap:6px; }
+.browser-bar .dots i{ width:11px; height:11px; border-radius:50%; background:var(--paper-edge); display:block; }
+.browser-bar .url{
+  flex:1; text-align:center; font-family:var(--mono); font-size:12px;
+  color:var(--ink-3); background:var(--paper); border-radius:6px; padding:5px 10px;
+  border:1px solid var(--paper-edge);
+}
+
+/* ── app shell ─────────────────────────────────────────────────────────── */
+.app{
+  display:grid; grid-template-columns: 232px 1fr; height:100%;
+  background:var(--paper);
+}
+.app-side{
+  border-right:1px solid var(--rule);
+  padding:20px 14px 24px;
+  display:flex; flex-direction:column; gap:18px;
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+}
+.brand-row{
+  display:flex; align-items:center; gap:12px; padding: 4px 6px 8px;
+  border-bottom:1px solid var(--rule);
+}
+.brand-row .wm{ font-family:var(--serif); font-style:italic; font-size:24px; line-height:1; }
+.brand-row .sub{ font-family:var(--mono); font-size:10px; color:var(--ink-3); letter-spacing:.14em; text-transform:uppercase; margin-left:auto; }
+.side-label{
+  font-family:var(--mono); font-size:10px; letter-spacing:.18em; color:var(--ink-3);
+  text-transform:uppercase; padding: 6px 8px 4px;
+}
+.alias-list{ display:flex; flex-direction:column; gap:2px; }
+.alias{
+  display:flex; align-items:center; gap:10px;
+  padding:8px 10px; border-radius:6px;
+  font-family:var(--mono); font-size:12px; color:var(--ink-2);
+  cursor:pointer;
+}
+.alias:hover{ background:var(--paper); }
+.alias.active{ background:#E9E1D0; color:var(--ink); }
+.alias .name{
+  font-family:var(--serif); font-style:italic; font-size:14px; color:var(--ink);
+  font-feature-settings: "kern" 1;
+}
+.alias .name + .addr{ color:var(--ink-3); margin-left:auto; }
+.alias .stripe{
+  width:3px; height:18px; border-radius:2px; flex-shrink:0;
+}
+.alias .badge{
+  margin-left:auto;
+  width:6px; height:6px; border-radius:50%; background:var(--seal);
+}
+
+.side-compose{
+  margin-top:auto; display:flex; gap:8px;
+  align-items:center; padding:10px 12px; border-radius:8px;
+  background:var(--ink); color:var(--paper); cursor:pointer;
+  font-family:var(--sans); font-weight:500; font-size:13px;
+  border:1px solid var(--ink);
+}
+.side-compose .nib{
+  width:14px; height:14px; border-radius:50%; background:var(--seal);
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+
+/* main column */
+.app-main{ display:grid; grid-template-rows: auto 1fr; }
+.main-head{
+  display:flex; align-items:baseline; justify-content:space-between;
+  padding:22px 32px 18px;
+  border-bottom:1px solid var(--rule);
+}
+.main-head h1{
+  font-family:var(--serif); font-weight:400; font-style:italic;
+  font-size:28px; letter-spacing:-0.02em; margin:0;
+}
+.main-head .meta{ font-family:var(--mono); font-size:11px; color:var(--ink-3); letter-spacing:.1em; text-transform:uppercase; }
+.main-head .meta b{ color:var(--ink); font-weight:500; }
+
+.msg-list{ overflow:hidden; }
+.msg{
+  display:grid; grid-template-columns: 20px 1fr 96px;
+  align-items:start;
+  gap:18px;
+  padding:16px 32px;
+  border-bottom:1px solid var(--rule);
+  position:relative;
+  cursor:pointer;
+}
+.msg .dot{ width:6px; height:6px; border-radius:50%; background:transparent; margin-top:9px; }
+.msg.unread .dot{ background:var(--seal); }
+.msg .who{
+  font-family:var(--serif); font-style:italic; font-weight:400;
+  font-size:17px; letter-spacing:-0.01em;
+  color:var(--ink); line-height:1.2;
+}
+.msg.read .who{ color:var(--ink-2); }
+.msg .subj{
+  font-family:var(--sans); font-weight:500;
+  font-size:14px; color:var(--ink); margin-top:4px; line-height:1.35;
+}
+.msg.read .subj{ font-weight:400; color:var(--ink-2); }
+.msg .prev{
+  font-family:var(--sans); font-size:13px; color:var(--ink-3);
+  margin-top:3px; overflow:hidden; text-overflow:ellipsis;
+  display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical;
+}
+.msg .tag{
+  display:inline-flex; align-items:center; gap:6px;
+  font-family:var(--mono); font-size:10px;
+  color:var(--ink-3); margin-top:7px;
+  letter-spacing:.04em;
+}
+.msg .tag .stripe{ width:8px; height:2px; border-radius:1px; }
+.msg .time{
+  font-family:var(--mono); font-size:11px; color:var(--ink-3);
+  text-align:right; letter-spacing:.04em; margin-top:5px;
+}
+.msg:hover{ background:var(--paper-2); }
+.msg.selected{ background:#EBE3D2; }
+.msg.selected::before{
+  content:""; position:absolute; left:0; top:0; bottom:0; width:2px; background:var(--seal);
+}
+
+/* read view */
+.read{
+  display:grid; grid-template-rows: auto 1fr; height:100%;
+}
+.read-head{ padding:28px 56px 18px; border-bottom:1px solid var(--rule); }
+.read-eyebrow{ display:flex; gap:14px; align-items:center; font-family:var(--mono); font-size:11px; color:var(--ink-3); letter-spacing:.12em; text-transform:uppercase; }
+.read-eyebrow .bar{ flex:1; height:1px; background:var(--rule); }
+.read-title{
+  font-family:var(--serif); font-weight:400;
+  font-size:36px; line-height:1.15; letter-spacing:-0.015em;
+  margin:14px 0 18px;
+}
+.read-from{
+  display:flex; align-items:center; gap:14px;
+  padding:14px 0;
+  border-top:1px solid var(--rule);
+}
+.read-from .avatar{
+  width:38px; height:38px; border-radius:50%;
+  background:var(--ink); color:var(--paper);
+  display:grid; place-items:center;
+  font-family:var(--serif); font-style:italic; font-size:18px;
+  flex-shrink:0;
+}
+.read-from .who{ font-family:var(--serif); font-style:italic; font-size:17px; }
+.read-from .who .addr{ font-family:var(--mono); font-style:normal; color:var(--ink-3); font-size:12px; margin-left:6px; }
+.read-from .to{ font-family:var(--mono); font-size:11px; color:var(--ink-3); margin-top:2px; }
+.read-from .stamp{
+  margin-left:auto; display:flex; align-items:center; gap:10px;
+  font-family:var(--mono); font-size:11px; color:var(--ink-3);
+  letter-spacing:.06em;
+}
+.read-from .stamp .seal-sm{ transform:rotate(-6deg); }
+.read-body{
+  padding:28px 56px 56px; overflow:auto;
+  max-width:none;
+}
+.read-body p{ margin:0 0 18px; font-family:var(--serif); font-size:17px; line-height:1.65; color:var(--ink); }
+.read-body p.lede{ font-style:italic; color:var(--ink-2); }
+.read-body .actions{
+  margin-top:36px; display:flex; gap:8px; padding-top:28px; border-top:1px solid var(--rule);
+}
+.act{
+  display:inline-flex; align-items:center; gap:8px;
+  padding:8px 14px; border-radius:6px;
+  font-family:var(--sans); font-weight:500; font-size:13px;
+  background:transparent; color:var(--ink); border:1px solid var(--rule);
+  cursor:pointer;
+}
+.act:hover{ background:var(--paper-2); }
+.act.primary{
+  background:var(--ink); color:var(--paper); border-color:var(--ink);
+}
+.act.primary .seal-sm{ transform:rotate(-4deg); }
+
+/* compose modal mock */
+.compose-shot{ position:relative; }
+.compose-backdrop{
+  position:absolute; inset:0; background: rgba(26,24,21,.18);
+  backdrop-filter: blur(2px);
+}
+.compose-card{
+  position:absolute; inset:auto 0 0 0; max-width:620px; margin:0 auto;
+  bottom:24px;
+  background:var(--paper); border:1px solid var(--paper-edge);
+  border-radius:12px; padding:18px 22px 16px;
+  box-shadow: 0 24px 48px -18px rgba(26,24,21,.4);
+}
+.compose-head{
+  display:flex; align-items:center; justify-content:space-between;
+  border-bottom:1px solid var(--rule); padding-bottom:10px;
+}
+.compose-head h3{
+  margin:0; font-family:var(--serif); font-style:italic; font-weight:400; font-size:18px; letter-spacing:-0.01em;
+}
+.compose-head .x{ font-family:var(--mono); font-size:14px; color:var(--ink-3); cursor:pointer; }
+.compose-field{
+  display:flex; gap:14px; align-items:baseline;
+  padding:10px 0; border-bottom:1px solid var(--rule);
+}
+.compose-field label{ font-family:var(--mono); font-size:11px; letter-spacing:.16em; color:var(--ink-3); text-transform:uppercase; width:72px; }
+.compose-field input, .compose-field textarea{
+  border:0; outline:0; background:transparent; flex:1;
+  font-family:var(--sans); font-size:14px; color:var(--ink);
+  resize:none;
+}
+.compose-field textarea{ min-height:72px; }
+.compose-actions{ display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
+.compose-actions .hint{ font-family:var(--mono); font-size:11px; color:var(--ink-3); }
+
+/* ── 4. mobile mocks ───────────────────────────────────────────────────── */
+.phones{ display:grid; grid-template-columns: repeat(3, 1fr); gap:36px; }
+@media (max-width: 1000px){ .phones{ grid-template-columns: 1fr 1fr; } }
+@media (max-width: 700px){ .phones{ grid-template-columns: 1fr; } }
+.phone{
+  aspect-ratio: 9/19.5;
+  border-radius:38px;
+  background:#1A1815;
+  padding:8px;
+  box-shadow: 0 30px 60px -28px rgba(26,24,21,.4);
+}
+.phone-screen{
+  width:100%; height:100%;
+  background:var(--paper); border-radius:32px;
+  position:relative; overflow:hidden;
+  display:grid; grid-template-rows: auto 1fr auto;
+}
+.phone-notch{
+  position:absolute; top:14px; left:50%; transform:translateX(-50%);
+  width:90px; height:24px; background:#1A1815; border-radius:14px; z-index:5;
+}
+.mob-head{
+  padding: 56px 22px 14px;
+  display:flex; align-items:center; justify-content:space-between;
+  border-bottom:1px solid var(--rule);
+}
+.mob-head .brand{ display:flex; align-items:center; gap:10px; }
+.mob-head .brand .wm{ font-family:var(--serif); font-style:italic; font-size:22px; }
+.mob-head .icons{ display:flex; gap:14px; }
+.icn{
+  width:22px; height:22px;
+  color:var(--ink-2);
+}
+.mob-filter{
+  display:flex; align-items:center; gap:10px;
+  padding: 14px 22px 10px;
+  font-family:var(--mono); font-size:11px; color:var(--ink-3); letter-spacing:.12em; text-transform:uppercase;
+}
+.mob-filter .chip{
+  background:#E9E1D0; color:var(--ink); border-radius:14px; padding:5px 10px;
+  font-family:var(--serif); font-style:italic; font-size:13px; letter-spacing:-0.005em;
+  text-transform:none; display:inline-flex; align-items:center; gap:6px;
+}
+.mob-filter .chip .stripe{ width:8px; height:2px; border-radius:1px; }
+
+.mob-list{ overflow:hidden; }
+.mob-msg{
+  display:grid; grid-template-columns: 14px 1fr auto;
+  gap:12px; padding:14px 22px; border-bottom:1px solid var(--rule);
+}
+.mob-msg .dot{ width:6px; height:6px; border-radius:50%; margin-top:8px; background:transparent; }
+.mob-msg.unread .dot{ background:var(--seal); }
+.mob-msg .who{ font-family:var(--serif); font-style:italic; font-size:15px; }
+.mob-msg.read .who{ color:var(--ink-2); }
+.mob-msg .subj{ font-family:var(--sans); font-size:12.5px; font-weight:500; margin-top:2px; }
+.mob-msg.read .subj{ font-weight:400; color:var(--ink-2); }
+.mob-msg .prev{ font-family:var(--sans); font-size:11.5px; color:var(--ink-3); margin-top:1px; }
+.mob-msg .meta{ text-align:right; font-family:var(--mono); font-size:10px; color:var(--ink-3); }
+.mob-msg .meta .tag{ display:block; margin-top:6px; color:var(--ink-3); }
+
+.mob-tabbar{
+  display:flex; justify-content:space-around; padding:10px 0 22px;
+  border-top:1px solid var(--rule); background:var(--paper-2);
+}
+.mob-tab{ display:flex; flex-direction:column; align-items:center; gap:4px; font-family:var(--mono); font-size:9px; color:var(--ink-3); text-transform:uppercase; letter-spacing:.1em; }
+.mob-tab.active{ color:var(--ink); }
+.mob-tab.active .icn{ color:var(--ink); }
+
+/* read on mobile */
+.mob-read-head{
+  padding: 56px 22px 12px; border-bottom:1px solid var(--rule);
+}
+.mob-read-head .back{ font-family:var(--mono); font-size:11px; color:var(--ink-3); letter-spacing:.12em; }
+.mob-read-head h2{
+  margin:8px 0 10px;
+  font-family:var(--serif); font-weight:400;
+  font-size:22px; line-height:1.2; letter-spacing:-0.015em;
+}
+.mob-read-from{
+  display:flex; gap:10px; align-items:center; padding-top:10px;
+  border-top:1px solid var(--rule);
+}
+.mob-read-from .avatar{ width:30px; height:30px; border-radius:50%; background:var(--ink); color:var(--paper); display:grid; place-items:center; font-family:var(--serif); font-style:italic; font-size:14px; }
+.mob-read-from .who{ font-family:var(--serif); font-style:italic; font-size:14px; }
+.mob-read-from .when{ margin-left:auto; font-family:var(--mono); font-size:10px; color:var(--ink-3); }
+.mob-read-body{ padding:18px 22px; overflow:auto; }
+.mob-read-body p{ font-family:var(--serif); font-size:14px; line-height:1.65; color:var(--ink); margin:0 0 12px; }
+.mob-actions{
+  display:flex; justify-content:space-around; padding:12px 0 22px;
+  border-top:1px solid var(--rule); background:var(--paper-2);
+}
+.mob-act{ display:flex; align-items:center; gap:8px; font-family:var(--sans); font-size:12px; color:var(--ink); font-weight:500; }
+.mob-act.primary{ color:var(--seal); }
+
+/* compose phone */
+.phone-compose .mob-read-head{ padding-bottom:18px; }
+.phone-compose h2{ font-size:20px; }
+.compose-stack{ padding:18px 22px; display:flex; flex-direction:column; gap:14px; }
+.compose-stack .row{ display:flex; gap:10px; align-items:baseline; padding-bottom:10px; border-bottom:1px solid var(--rule); }
+.compose-stack .row label{ font-family:var(--mono); font-size:10px; color:var(--ink-3); letter-spacing:.16em; text-transform:uppercase; width:54px; }
+.compose-stack .row .val{ font-family:var(--sans); font-size:13px; color:var(--ink); flex:1; }
+.compose-stack .row .val.placeholder{ color:var(--ink-3); }
+.compose-stack textarea.draft{
+  border:0; outline:0; background:transparent;
+  font-family:var(--sans); font-size:13px; color:var(--ink);
+  resize:none; min-height:140px; padding:0;
+}
+
+/* logo gallery */
+.logos{ display:grid; grid-template-columns: repeat(4, 1fr); gap:18px; align-items:stretch; }
+@media (max-width:920px){ .logos{ grid-template-columns: repeat(2,1fr); } }
+.logo-card{
+  border:1px solid var(--rule); border-radius:10px; padding:28px;
+  display:flex; flex-direction:column; gap:18px;
+  align-items:flex-start;
+  background:var(--paper);
+}
+.logo-card.dark{ background:var(--ink); }
+.logo-card.dark .wordmark{ color:var(--paper); }
+.logo-card .caption{ margin-top:auto; font-family:var(--mono); font-size:10px; color:var(--ink-3); letter-spacing:.14em; text-transform:uppercase; }
+.logo-card.dark .caption{ color:#7A7468; }
+.logo-row{ display:flex; align-items:center; gap:14px; }
+
+/* favicon strip */
+.favs{ display:flex; gap:14px; align-items:center; margin-top:24px; }
+.favs .fv{
+  background:var(--paper); border:1px solid var(--rule); border-radius:8px;
+  padding:8px; display:grid; place-items:center;
+}
+.favs .fv .seal{ transform:rotate(-3deg); }
+
+/* notes */
+.notes{ display:grid; grid-template-columns: repeat(3, 1fr); gap:28px; }
+@media (max-width:920px){ .notes{ grid-template-columns:1fr; } }
+.note{ border:1px solid var(--rule); border-radius:10px; padding:22px 22px 24px; background:var(--paper); }
+.note h4{ margin:0 0 10px; font-family:var(--serif); font-style:italic; font-weight:400; font-size:20px; letter-spacing:-0.01em; }
+.note p{ margin:0; font-size:13px; color:var(--ink-2); line-height:1.55; }
+.note .num{ font-family:var(--mono); font-size:11px; color:var(--seal); letter-spacing:.16em; }
+
+/* tiny inline icons (svg) */
+svg.icn{ display:inline-block; }
+
+/* footer */
+.foot{
+  padding:48px 0 80px; border-top:1px solid var(--rule);
+  font-family:var(--mono); font-size:11px; color:var(--ink-3);
+  letter-spacing:.1em; text-transform:uppercase;
+  display:flex; justify-content:space-between;
+}
+.foot .dot{ width:6px; height:6px; border-radius:50%; background:var(--seal); display:inline-block; margin-right:8px; vertical-align:middle; }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+<!-- ── 1. HERO ─────────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-nav">
+    <div><span class="dot"></span>&nbsp;&nbsp;aliasnest · brand & interface proposal · v0</div>
+    <div>atsumilabs · 2026.06.17</div>
+  </div>
+
+  <div class="hero-main">
+    <div>
+      <div class="hero-stamp">
+        <div class="seal seal-lg">
+          <span class="seal-glyph">巣</span>
+        </div>
+      </div>
+
+      <div class="hero-word">aliasnest</div>
+
+      <div class="hero-tag">
+        <span class="bar"></span>
+        private mail · sealed
+        <span class="bar"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="hero-meta">
+    <div>concept<span>a vault for your inbox</span></div>
+    <div>parent<span>atsumilabs</span></div>
+    <div>built on<span>react, expo, fastapi</span></div>
+  </div>
+</section>
+
+<!-- ── 2. SYSTEM ───────────────────────────────────────────────────────── -->
+<section>
+  <div class="wrap">
+    <div class="eyebrow">§ 01 · system</div>
+    <h2 class="section-title">A small palette, <em>used like ink and paper.</em></h2>
+    <p class="section-lede">
+      Three colors. One accent — the vermilion of a hanko seal — used sparingly: the brand mark,
+      the unread indicator, the primary action. Everything else is paper, ink, and rule lines.
+      Type is editorial: a literary serif paired with a neutral sans and a precise monospace for
+      addresses and codes. Nothing decorative; everything signals function.
+    </p>
+
+    <div class="sys">
+      <div>
+        <div class="eyebrow" style="margin-bottom:14px;">palette</div>
+        <div class="palette">
+          <div class="swatch sw-paper">  <div class="name">washi</div><div class="hex">#F5F1EA</div></div>
+          <div class="swatch sw-paper2"> <div class="name">linen</div><div class="hex">#EFE9DF</div></div>
+          <div class="swatch sw-rule">   <div class="name">rule</div> <div class="hex">#D9D2C3</div></div>
+          <div class="swatch sw-seal">   <div class="name">vermilion</div><div class="hex">#C8463A</div></div>
+          <div class="swatch sw-ink2">   <div class="name">slate ink</div><div class="hex">#3D3A34</div></div>
+          <div class="swatch sw-ink">    <div class="name">ink</div>  <div class="hex">#1A1815</div></div>
+        </div>
+      </div>
+
+      <div class="type-stack">
+        <div>
+          <div class="type-eyebrow"><span class="role">display</span><span class="name">Newsreader · italic · 300</span></div>
+          <div class="type-spec-serif">A letter, sealed.</div>
+        </div>
+        <div>
+          <div class="type-eyebrow"><span class="role">body</span><span class="name">General Sans · 400/500</span></div>
+          <div class="type-spec-sans">Mask the address, not the person.</div>
+        </div>
+        <div>
+          <div class="type-eyebrow"><span class="role">technical</span><span class="name">JetBrains Mono · 400/500</span></div>
+          <div class="type-spec-mono">shopping-1@aliasnest.com</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 3. LOGOMARK ─────────────────────────────────────────────────────── -->
+<section>
+  <div class="wrap">
+    <div class="eyebrow">§ 02 · mark</div>
+    <h2 class="section-title">The seal is the brand. <em>One glyph, one gesture.</em></h2>
+    <p class="section-lede">
+      A vermilion square, slightly off-square, slightly rotated, slightly worn —
+      a hanko stamp. Inside: the kanji 巣 (<em>su</em>) — <em>nest</em>. A small, woven, private
+      place. The same mark scales from 16px favicon to a 120px hero, and reads at every size.
+    </p>
+
+    <div class="logos">
+      <div class="logo-card">
+        <div class="seal seal-lg"><span class="seal-glyph">巣</span></div>
+        <div class="caption">primary · stamp</div>
+      </div>
+      <div class="logo-card">
+        <div class="logo-row">
+          <div class="seal seal-md"><span class="seal-glyph">巣</span></div>
+          <div class="wordmark wordmark-lg">aliasnest</div>
+        </div>
+        <div class="caption">horizontal lockup</div>
+      </div>
+      <div class="logo-card dark">
+        <div class="logo-row">
+          <div class="seal seal-md"><span class="seal-glyph">巣</span></div>
+          <div class="wordmark wordmark-lg" style="color:var(--paper);">aliasnest</div>
+        </div>
+        <div class="caption">on ink</div>
+      </div>
+      <div class="logo-card">
+        <div class="favs">
+          <div class="fv"><div class="seal seal-sm"><span class="seal-glyph">巣</span></div></div>
+          <div class="fv"><div class="seal seal-md"><span class="seal-glyph">巣</span></div></div>
+          <div class="fv"><div class="seal seal-lg" style="width:64px;height:64px;border-radius:8px;"><span class="seal-glyph" style="font-size:42px;">巣</span></div></div>
+        </div>
+        <div class="caption">favicon · 16 / 32 / 64</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 4. WEB · INBOX ──────────────────────────────────────────────────── -->
+<section>
+  <div class="wrap">
+    <div class="eyebrow">§ 03 · web · inbox</div>
+    <h2 class="section-title">An inbox you can read. <em>One column, named correspondents.</em></h2>
+    <p class="section-lede">
+      Senders are typeset in italic serif, like a byline. Subjects are sans for clarity.
+      Unread is a single vermilion dot — no bold, no background, nothing shouting. Each
+      message is tagged with the alias that received it; the alias gets a tiny color
+      stripe so you can recognize it without reading.
+    </p>
+
+    <div class="frame">
+      <div class="browser">
+        <div class="browser-bar">
+          <div class="dots"><i></i><i></i><i></i></div>
+          <div class="url">aliasnest.com · inbox</div>
+        </div>
+        <div class="app">
+          <aside class="app-side">
+            <div class="brand-row">
+              <div class="seal seal-sm"><span class="seal-glyph">巣</span></div>
+              <div class="wm">aliasnest</div>
+              <div class="sub">v 0 · 1</div>
+            </div>
+
+            <div>
+              <div class="side-label">Correspondence</div>
+              <div class="alias-list">
+                <div class="alias active">
+                  <span class="stripe" style="background:#C8463A"></span>
+                  <span class="name">all</span>
+                  <span class="badge"></span>
+                </div>
+                <div class="alias">
+                  <span class="stripe" style="background:#7A8A4C"></span>
+                  <span>shopping-1</span>
+                </div>
+                <div class="alias">
+                  <span class="stripe" style="background:#7C6C9C"></span>
+                  <span>signups</span>
+                  <span class="badge"></span>
+                </div>
+                <div class="alias">
+                  <span class="stripe" style="background:#A37B3E"></span>
+                  <span>finance</span>
+                </div>
+                <div class="alias">
+                  <span class="stripe" style="background:#3F6F86"></span>
+                  <span>travel</span>
+                </div>
+                <div class="alias">
+                  <span class="stripe" style="background:#86523F"></span>
+                  <span>family</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="side-compose">
+              <span class="nib"></span>
+              <span>Compose</span>
+              <span style="margin-left:auto; font-family:var(--mono); font-size:10px; opacity:.6;">⌘N</span>
+            </div>
+          </aside>
+
+          <main class="app-main">
+            <div class="main-head">
+              <h1>Correspondence</h1>
+              <div class="meta">today · <b>12</b> messages · <b>3</b> unread</div>
+            </div>
+
+            <div class="msg-list">
+              <div class="msg unread">
+                <div class="dot"></div>
+                <div>
+                  <div class="who">Mira Chen</div>
+                  <div class="subj">thinking about your last note</div>
+                  <div class="prev">i finally read the piece you sent — i want to write back properly but first this small thing…</div>
+                  <div class="tag"><span class="stripe" style="background:#86523F"></span>family · mira@aliasnest.com</div>
+                </div>
+                <div class="time">9:42<br><span style="opacity:.5">a.m.</span></div>
+              </div>
+
+              <div class="msg unread selected">
+                <div class="dot"></div>
+                <div>
+                  <div class="who">Notion</div>
+                  <div class="subj">Your login code is <span style="font-family:var(--mono)">4·9·1·8·2·0</span></div>
+                  <div class="prev">Use this code within 10 minutes to sign in. If you didn't request this, you can safely ignore.</div>
+                  <div class="tag"><span class="stripe" style="background:#7C6C9C"></span>signups · notion@aliasnest.com</div>
+                </div>
+                <div class="time">9:18<br><span style="opacity:.5">a.m.</span></div>
+              </div>
+
+              <div class="msg unread">
+                <div class="dot"></div>
+                <div>
+                  <div class="who">United Airlines</div>
+                  <div class="subj">Confirmation · SFO → NRT, Oct 12</div>
+                  <div class="prev">Your reservation MN3JK7 is confirmed. Manage your trip, choose seats, and add bags.</div>
+                  <div class="tag"><span class="stripe" style="background:#3F6F86"></span>travel · united@aliasnest.com</div>
+                </div>
+                <div class="time">8:55<br><span style="opacity:.5">a.m.</span></div>
+              </div>
+
+              <div class="msg read">
+                <div class="dot"></div>
+                <div>
+                  <div class="who">The New York Times</div>
+                  <div class="subj">What we know about the storm in Mumbai</div>
+                  <div class="prev">Today: an unusually early monsoon, a contested election in Mexico, and the case for boring AI.</div>
+                  <div class="tag"><span class="stripe" style="background:#7C6C9C"></span>signups · nyt@aliasnest.com</div>
+                </div>
+                <div class="time">7:30<br><span style="opacity:.5">a.m.</span></div>
+              </div>
+
+              <div class="msg read">
+                <div class="dot"></div>
+                <div>
+                  <div class="who">Anthropic</div>
+                  <div class="subj">Your invoice for May is ready</div>
+                  <div class="prev">Hi Vijay — Your invoice for the period 2026-05-01 to 2026-05-31 is attached. View it in the billing portal.</div>
+                  <div class="tag"><span class="stripe" style="background:#A37B3E"></span>finance · billing@aliasnest.com</div>
+                </div>
+                <div class="time">Yest.<br><span style="opacity:.5">10:11p</span></div>
+              </div>
+
+              <div class="msg read">
+                <div class="dot"></div>
+                <div>
+                  <div class="who">REI Co-op</div>
+                  <div class="subj">Your order has shipped</div>
+                  <div class="prev">We packed your order #82-991-441 today. Track delivery with FedEx or in your account.</div>
+                  <div class="tag"><span class="stripe" style="background:#7A8A4C"></span>shopping-1 · rei@aliasnest.com</div>
+                </div>
+                <div class="time">Sun<br><span style="opacity:.5">2:14p</span></div>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 5. WEB · READ ───────────────────────────────────────────────────── -->
+<section>
+  <div class="wrap">
+    <div class="eyebrow">§ 04 · web · reading</div>
+    <h2 class="section-title">The message is the page. <em>Postmark, then prose.</em></h2>
+    <p class="section-lede">
+      Open a message and it takes the whole canvas. The subject is set as a title. A small
+      stamp marks the mask the message arrived on — the digital equivalent of a wax seal
+      on the envelope. Actions live at the foot of the page, where you'd sign a letter.
+    </p>
+
+    <div class="frame">
+      <div class="browser">
+        <div class="browser-bar">
+          <div class="dots"><i></i><i></i><i></i></div>
+          <div class="url">aliasnest.com · message · MN3JK7</div>
+        </div>
+        <div class="app">
+          <aside class="app-side">
+            <div class="brand-row">
+              <div class="seal seal-sm"><span class="seal-glyph">巣</span></div>
+              <div class="wm">aliasnest</div>
+              <div class="sub">v 0 · 1</div>
+            </div>
+            <div>
+              <div class="side-label">Correspondence</div>
+              <div class="alias-list">
+                <div class="alias"><span class="stripe" style="background:#C8463A"></span><span class="name">all</span></div>
+                <div class="alias"><span class="stripe" style="background:#7A8A4C"></span><span>shopping-1</span></div>
+                <div class="alias"><span class="stripe" style="background:#7C6C9C"></span><span>signups</span></div>
+                <div class="alias"><span class="stripe" style="background:#A37B3E"></span><span>finance</span></div>
+                <div class="alias active"><span class="stripe" style="background:#3F6F86"></span><span>travel</span></div>
+                <div class="alias"><span class="stripe" style="background:#86523F"></span><span>family</span></div>
+              </div>
+            </div>
+            <div class="side-compose">
+              <span class="nib"></span><span>Compose</span>
+              <span style="margin-left:auto; font-family:var(--mono); font-size:10px; opacity:.6;">⌘N</span>
+            </div>
+          </aside>
+
+          <main class="app-main">
+            <div class="read">
+              <div class="read-head">
+                <div class="read-eyebrow">
+                  <span class="bar"></span>
+                  No. 1043 · received · Tue, 17 Jun 2026
+                  <span class="bar"></span>
+                </div>
+                <h1 class="read-title">Confirmation: SFO → NRT, Oct 12</h1>
+
+                <div class="read-from">
+                  <div class="avatar">U</div>
+                  <div>
+                    <div class="who">United Airlines<span class="addr">noreply@united.com</span></div>
+                    <div class="to">to · united@aliasnest.com</div>
+                  </div>
+                  <div class="stamp">
+                    <div class="seal seal-sm"><span class="seal-glyph">巣</span></div>
+                    travel
+                  </div>
+                </div>
+              </div>
+
+              <div class="read-body">
+                <p class="lede">Reservation MN3JK7 — Mr. Vijay Agarwal — confirmed.</p>
+                <p>Your trip is booked. We've held two suitcases worth of cargo capacity for you on UA837, departing San Francisco at 11:25 a.m. on October 12, arriving Tokyo Narita at 3:40 p.m. the following day.</p>
+                <p>You can choose seats, add bags, and request a meal preference any time before the flight. If your plans change, the lowest-fare cancellation fee applies as of today.</p>
+                <p>We will send a separate note when online check-in opens, twenty-four hours before departure.</p>
+
+                <div class="actions">
+                  <button class="act primary">
+                    <div class="seal seal-sm"><span class="seal-glyph">巣</span></div>
+                    Reply
+                  </button>
+                  <button class="act">Reply all</button>
+                  <button class="act">Forward</button>
+                  <button class="act" style="margin-left:auto;">Mark unread</button>
+                  <button class="act" style="color:var(--seal); border-color:transparent;">Discard</button>
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 6. WEB · COMPOSE ────────────────────────────────────────────────── -->
+<section>
+  <div class="wrap">
+    <div class="eyebrow">§ 05 · web · compose</div>
+    <h2 class="section-title">Composing is a small, calm card. <em>Like a desk lamp clicking on.</em></h2>
+    <p class="section-lede">
+      Reply, reply-all, and forward share one composer. The "From" address is the alias —
+      front and center — so you always know which mask you're writing through. The send
+      button is the only red on the page.
+    </p>
+
+    <div class="frame" style="height:560px;">
+      <div class="browser" style="aspect-ratio:auto; height:100%;">
+        <div class="browser-bar">
+          <div class="dots"><i></i><i></i><i></i></div>
+          <div class="url">aliasnest.com · message · forward</div>
+        </div>
+        <div class="compose-shot" style="height:100%; background:var(--paper); position:relative;">
+          <!-- backdrop dim of underlying app -->
+          <div style="position:absolute; inset:0; padding:32px 56px; opacity:.35;">
+            <div style="font-family:var(--serif); font-style:italic; font-size:28px;">Correspondence</div>
+            <div style="margin-top:24px; border-top:1px solid var(--rule); padding-top:14px; color:var(--ink-3);">
+              <div style="font-family:var(--serif); font-style:italic; font-size:18px;">United Airlines · Confirmation: SFO → NRT, Oct 12</div>
+              <div style="font-family:var(--sans); font-size:13px; margin-top:6px;">Your reservation MN3JK7 is confirmed…</div>
+            </div>
+          </div>
+          <div class="compose-backdrop"></div>
+          <div class="compose-card">
+            <div class="compose-head">
+              <h3>Forward · <span style="font-style:normal; font-family:var(--mono); font-size:12px; color:var(--ink-3);">via travel@aliasnest.com</span></h3>
+              <div class="x">close</div>
+            </div>
+            <div class="compose-field">
+              <label>To</label>
+              <input value="mira@gmail.com" />
+            </div>
+            <div class="compose-field">
+              <label>Subject</label>
+              <input value="Fwd: Confirmation: SFO → NRT, Oct 12" />
+            </div>
+            <div class="compose-field">
+              <label>Note</label>
+              <textarea>thought you'd want the details — i land at 3:40 your time, dinner in shimokitazawa?</textarea>
+            </div>
+            <div class="compose-actions">
+              <div class="hint">Original message will be quoted below.</div>
+              <button class="act primary">
+                <div class="seal seal-sm"><span class="seal-glyph">巣</span></div>
+                Send
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 7. MOBILE ───────────────────────────────────────────────────────── -->
+<section>
+  <div class="wrap">
+    <div class="eyebrow">§ 06 · mobile</div>
+    <h2 class="section-title">The same desk, in your pocket. <em>Same paper, same ink.</em></h2>
+    <p class="section-lede">
+      No bottom sheets, no shouty buttons. A single column, the same serif italic for
+      senders, the same monospace for addresses, the same red dot for unread. The brand
+      mark sits in the top-left and acts as the alias drawer toggle.
+    </p>
+
+    <div class="phones">
+      <!-- Inbox -->
+      <div class="phone">
+        <div class="phone-screen">
+          <div class="phone-notch"></div>
+          <div class="mob-head">
+            <div class="brand">
+              <div class="seal seal-md"><span class="seal-glyph">巣</span></div>
+              <div class="wm">aliasnest</div>
+            </div>
+            <div class="icons">
+              <!-- search -->
+              <svg class="icn" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+              <!-- write -->
+              <svg class="icn" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            </div>
+          </div>
+          <div class="mob-filter">
+            today
+            <span class="chip"><span class="stripe" style="background:#C8463A"></span>all correspondents</span>
+          </div>
+          <div class="mob-list" style="overflow:hidden;">
+            <div class="mob-msg unread">
+              <div class="dot"></div>
+              <div>
+                <div class="who">Mira Chen</div>
+                <div class="subj">thinking about your last note</div>
+                <div class="prev">i finally read the piece you sent — i want…</div>
+              </div>
+              <div class="meta">9:42a<span class="tag">family</span></div>
+            </div>
+            <div class="mob-msg unread">
+              <div class="dot"></div>
+              <div>
+                <div class="who">Notion</div>
+                <div class="subj">Login code <span style="font-family:var(--mono)">491820</span></div>
+                <div class="prev">Use this code within 10 minutes to…</div>
+              </div>
+              <div class="meta">9:18a<span class="tag">signups</span></div>
+            </div>
+            <div class="mob-msg unread">
+              <div class="dot"></div>
+              <div>
+                <div class="who">United Airlines</div>
+                <div class="subj">Confirmation · SFO → NRT, Oct 12</div>
+                <div class="prev">Your reservation MN3JK7 is confirmed…</div>
+              </div>
+              <div class="meta">8:55a<span class="tag">travel</span></div>
+            </div>
+            <div class="mob-msg read">
+              <div class="dot"></div>
+              <div>
+                <div class="who">The New York Times</div>
+                <div class="subj">What we know about the storm in Mumbai</div>
+                <div class="prev">Today: an unusually early monsoon…</div>
+              </div>
+              <div class="meta">7:30a<span class="tag">signups</span></div>
+            </div>
+            <div class="mob-msg read">
+              <div class="dot"></div>
+              <div>
+                <div class="who">Anthropic</div>
+                <div class="subj">Your invoice for May is ready</div>
+                <div class="prev">Hi Vijay — Your invoice for the period…</div>
+              </div>
+              <div class="meta">Yest<span class="tag">finance</span></div>
+            </div>
+          </div>
+          <div class="mob-tabbar">
+            <div class="mob-tab active">
+              <svg class="icn" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12L12 4l9 8"/><path d="M5 10v9h14v-9"/></svg>
+              Inbox
+            </div>
+            <div class="mob-tab">
+              <svg class="icn" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/><path d="M8 5v-2"/><path d="M16 5v-2"/></svg>
+              Aliases
+            </div>
+            <div class="mob-tab">
+              <svg class="icn" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06A2 2 0 1 1 4.27 16.96l.06-.06A1.65 1.65 0 0 0 4.66 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.66 9 1.65 1.65 0 0 0 4.33 7.18l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.66h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09c0 .67.39 1.27 1 1.51A1.65 1.65 0 0 0 16.82 4.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.34 9c.24.61.84 1 1.51 1H21a2 2 0 0 1 0 4h-.09c-.67 0-1.27.39-1.51 1Z"/></svg>
+              Settings
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Read -->
+      <div class="phone">
+        <div class="phone-screen">
+          <div class="phone-notch"></div>
+          <div class="mob-read-head">
+            <div class="back">← back to inbox</div>
+            <h2>Confirmation · SFO → NRT, Oct 12</h2>
+            <div class="mob-read-from">
+              <div class="avatar">U</div>
+              <div class="who">United Airlines</div>
+              <div class="when">Tue, 17 Jun · 8:55a</div>
+            </div>
+            <div style="margin-top:10px; display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:10px; color:var(--ink-3); letter-spacing:.08em;">
+              <div class="seal seal-sm" style="width:16px;height:16px;border-radius:2px;"><span class="seal-glyph" style="font-size:11px;">巣</span></div>
+              received on travel@aliasnest.com
+            </div>
+          </div>
+          <div class="mob-read-body">
+            <p><em>Reservation MN3JK7 — Mr. Vijay Agarwal — confirmed.</em></p>
+            <p>Your trip is booked. We've held two suitcases worth of cargo capacity for you on UA837, departing San Francisco at 11:25 a.m. on October 12, arriving Tokyo Narita at 3:40 p.m. the following day.</p>
+            <p>You can choose seats, add bags, and request a meal preference any time before the flight.</p>
+          </div>
+          <div class="mob-actions">
+            <div class="mob-act primary">
+              <div class="seal seal-sm" style="width:18px;height:18px;border-radius:3px;"><span class="seal-glyph" style="font-size:12px;">巣</span></div>
+              Reply
+            </div>
+            <div class="mob-act">Forward</div>
+            <div class="mob-act">Unread</div>
+            <div class="mob-act" style="color:var(--ink-3);">Delete</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Compose -->
+      <div class="phone phone-compose">
+        <div class="phone-screen">
+          <div class="phone-notch"></div>
+          <div class="mob-read-head">
+            <div class="back">close</div>
+            <h2>Forward</h2>
+            <div style="margin-top:6px; font-family:var(--mono); font-size:11px; color:var(--ink-3);">via travel@aliasnest.com</div>
+          </div>
+          <div class="compose-stack">
+            <div class="row"><label>to</label><div class="val">mira@gmail.com</div></div>
+            <div class="row"><label>subject</label><div class="val">Fwd: Confirmation · SFO → NRT</div></div>
+            <textarea class="draft">thought you'd want the details — i land at 3:40 your time, dinner in shimokitazawa?</textarea>
+            <div style="font-family:var(--mono); font-size:10px; color:var(--ink-3); letter-spacing:.08em;">
+              Original message will be quoted below.
+            </div>
+          </div>
+          <div class="mob-actions">
+            <div class="mob-act" style="color:var(--ink-3);">Discard</div>
+            <div class="mob-act primary">
+              <div class="seal seal-sm" style="width:18px;height:18px;border-radius:3px;"><span class="seal-glyph" style="font-size:12px;">巣</span></div>
+              Send
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 8. PRINCIPLES ───────────────────────────────────────────────────── -->
+<section>
+  <div class="wrap">
+    <div class="eyebrow">§ 07 · principles</div>
+    <h2 class="section-title">Five rules. <em>Apply across the product.</em></h2>
+    <p class="section-lede">
+      Choices that compound: if every screen follows these, the experience will feel
+      designed rather than assembled. If a future change conflicts with one of these,
+      revisit the rule first, not the screen.
+    </p>
+
+    <div class="notes">
+      <div class="note">
+        <div class="num">01</div>
+        <h4>Vermilion is precious.</h4>
+        <p>Use the seal red only for the brand mark, the unread indicator, and the primary action of the current screen. Never as a background, never for warnings (use ink), never twice in the same surface.</p>
+      </div>
+      <div class="note">
+        <div class="num">02</div>
+        <h4>Senders are people.</h4>
+        <p>Sender names are typeset in italic Newsreader — a byline. Subjects are sans for scanability. Addresses are mono. Each type tier carries a meaning; don't mix them.</p>
+      </div>
+      <div class="note">
+        <div class="num">03</div>
+        <h4>Aliases are correspondents.</h4>
+        <p>An alias is not a folder; it's <em>the channel a message arrived on</em>. Each alias gets a deterministic muted color stripe so the eye can scan by channel. Never call them "labels."</p>
+      </div>
+      <div class="note">
+        <div class="num">04</div>
+        <h4>The page is the message.</h4>
+        <p>No persistent right-pane preview. Opening a message takes the whole reading surface. Reading is the primary activity; let it own the canvas.</p>
+      </div>
+      <div class="note">
+        <div class="num">05</div>
+        <h4>Stamp, don't shout.</h4>
+        <p>Actions feel mechanical, like a stamp. Subtle scale + settle on send. Pull-to-refresh animates a small seal pressing down. Buttons don't bounce; they <em>press</em>.</p>
+      </div>
+      <div class="note">
+        <div class="num">06</div>
+        <h4>White space is structure.</h4>
+        <p>Negative space ("ma") communicates calm and intent. Resist the urge to fill empty regions with helper text, illustrations, or onboarding nudges. Quiet is the product.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="foot">
+  <div class="wrap" style="display:flex; justify-content:space-between; width:100%;">
+    <span><span class="dot"></span>aliasnest · v0 brand proposal · all values still up for revision</span>
+    <span>scroll back · ← top</span>
+  </div>
+</div>
+
+</div>
+
+</body>
+</html>

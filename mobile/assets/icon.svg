@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <filter id="ink-grain" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.5" numOctaves="2" seed="5"/>
+      <feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.35 0"/>
+      <feComposite in2="SourceGraphic" operator="in"/>
+    </filter>
+  </defs>
+  <rect width="1024" height="1024" fill="#F5F1EA"/>
+  <g transform="translate(512 512) rotate(-3) translate(-260 -260)">
+    <rect x="0" y="0" width="520" height="520" rx="70" fill="#C8463A"/>
+    <rect x="0" y="0" width="520" height="520" rx="70" fill="#ffffff" filter="url(#ink-grain)" opacity="0.55" style="mix-blend-mode:screen"/>
+    <text x="260" y="380" text-anchor="middle"
+          font-family="'Noto Serif JP', 'Hiragino Mincho ProN', 'Yu Mincho', serif"
+          font-weight="900" font-size="360" fill="#ffffff">巣</text>
+  </g>
+</svg>

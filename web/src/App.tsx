@@ -619,8 +619,8 @@ export default function App() {
           <div className="login-card">
             <div className="login-brand">
               <div className="login-logo"><IconInbox /></div>
-              <h1>AliasNest</h1>
-              <p>Create an account</p>
+              <h1>aliasnest</h1>
+              <p>create an account</p>
             </div>
             <div className="login-body">
               {error && <p className="login-error">{error}</p>}
@@ -640,8 +640,8 @@ export default function App() {
         <div className="login-card">
           <div className="login-brand">
             <div className="login-logo"><IconInbox /></div>
-            <h1>AliasNest</h1>
-            <p>Private email masking</p>
+            <h1>aliasnest</h1>
+            <p>private mail · sealed</p>
           </div>
           <div className="login-body">
             {error && <p className="login-error">{error}</p>}
@@ -662,7 +662,7 @@ export default function App() {
             <button onClick={() => void login()} disabled={busy}>
               {busy ? "Signing in…" : "Sign in"}
             </button>
-            <p className="login-switch">New to AliasNest? <button className="link-btn" onClick={() => { setView("register"); setError(null); }}>Create account</button></p>
+            <p className="login-switch">new to aliasnest? <button className="link-btn" onClick={() => { setView("register"); setError(null); }}>Create account</button></p>
           </div>
         </div>
       </div>
@@ -676,7 +676,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand-block">
           <div className="brand-icon"><IconInbox /></div>
-          <span className="brand-name">AliasNest</span>
+          <span className="brand-name">aliasnest</span>
         </div>
         <div className="top-actions">
           <span className="user-pill">{user?.email}</span>
@@ -805,7 +805,7 @@ export default function App() {
             {totalUnread > 0 && <span className="sidebar-badge">{totalUnread}</span>}
           </button>
 
-          {masks.length > 0 && <div className="sidebar-label">Aliases</div>}
+          {masks.length > 0 && <div className="sidebar-label">Correspondence</div>}
 
           {masks.map((mask) => (
             <div className={`mask-item${!mask.is_active ? " mask-paused" : ""}`} key={mask.id}>

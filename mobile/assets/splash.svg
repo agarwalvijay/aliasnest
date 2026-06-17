@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1242 2436">
+  <defs>
+    <filter id="paper-grain" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix values="0 0 0 0 0.1  0 0 0 0 0.09  0 0 0 0 0.08  0 0 0 0.06 0"/>
+    </filter>
+    <filter id="ink-grain" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="2" seed="3"/>
+      <feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.35 0"/>
+      <feComposite in2="SourceGraphic" operator="in"/>
+    </filter>
+  </defs>
+  <rect width="1242" height="2436" fill="#F5F1EA"/>
+  <rect width="1242" height="2436" filter="url(#paper-grain)" opacity="0.55"/>
+  <g transform="translate(621 1180) rotate(-3) translate(-128 -128)">
+    <rect x="0" y="0" width="256" height="256" rx="32" fill="#C8463A"/>
+    <rect x="0" y="0" width="256" height="256" rx="32" fill="#ffffff" filter="url(#ink-grain)" opacity="0.55" style="mix-blend-mode:screen"/>
+    <text x="128" y="188" text-anchor="middle"
+          font-family="'Noto Serif JP', 'Hiragino Mincho ProN', 'Yu Mincho', serif"
+          font-weight="900" font-size="180" fill="#ffffff">巣</text>
+  </g>
+  <text x="621" y="1380" text-anchor="middle"
+        font-family="Georgia, 'Newsreader', serif"
+        font-style="italic" font-weight="300"
+        font-size="100" fill="#1A1815" letter-spacing="-2">aliasnest</text>
+</svg>

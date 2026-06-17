@@ -130,7 +130,7 @@ async function writeSnapshotAsync(snap: Snapshot): Promise<void> {
 async function clearSnapshotAsync(): Promise<void> {
   try { await SecureStore.deleteItemAsync(SNAPSHOT_KEY); } catch { /* ignore */ }
 }
-const AVATAR_COLORS = ["#2f80ed", "#f2994a", "#eb5757", "#9b51e0", "#27ae60", "#56ccf2", "#bb6bd9"];
+const AVATAR_COLORS = ["#3F6F86", "#86523F", "#7A8A4C", "#7C6C9C", "#A37B3E", "#5C7A6B", "#7E5A3D"];
 const TIMEZONE_OPTIONS = [
   "UTC",
   "America/Chicago",
@@ -260,8 +260,8 @@ function SwipeableRow({ onDelete, children }: { onDelete: () => void; children: 
   return (
     <View style={{ overflow: "hidden" }}>
       <View style={swipeStyles.deleteBackground}>
-        <MaterialCommunityIcons name="trash-can-outline" size={24} color="#fff" />
-        <MaterialCommunityIcons name="trash-can-outline" size={24} color="#fff" />
+        <MaterialCommunityIcons name="trash-can-outline" size={24} color="#F5F1EA" />
+        <MaterialCommunityIcons name="trash-can-outline" size={24} color="#F5F1EA" />
       </View>
       <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
         {children}
@@ -273,7 +273,7 @@ function SwipeableRow({ onDelete, children }: { onDelete: () => void; children: 
 const swipeStyles = StyleSheet.create({
   deleteBackground: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#c4314b",
+    backgroundColor: "#C8463A",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -1002,7 +1002,7 @@ export default function App() {
         <SafeAreaView style={[styles.container, { paddingTop: topInset }]}>
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1, justifyContent: "center" }}>
             <ScrollView contentContainerStyle={styles.loginCard} keyboardShouldPersistTaps="handled">
-              <Text style={styles.brand}>AliasNest</Text>
+              <Text style={styles.brand}>aliasnest</Text>
               <Text style={styles.subtitle}>Create an account</Text>
               {error ? <Text style={styles.error}>{error}</Text> : null}
               <TextInput
@@ -1053,8 +1053,8 @@ export default function App() {
     return (
       <SafeAreaView style={[styles.container, { paddingTop: topInset }]}>
         <View style={styles.loginCard}>
-          <Text style={styles.brand}>AliasNest</Text>
-          <Text style={styles.subtitle}>Sign in to your inbox</Text>
+          <Text style={styles.brand}>aliasnest</Text>
+          <Text style={styles.subtitle}>private mail · sealed</Text>
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <TextInput
             value={email}
@@ -1080,7 +1080,7 @@ export default function App() {
             <Text style={styles.primaryBtnText}>{busy ? "Signing in..." : "Sign in"}</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => { setViewMode("register"); setError(null); }} style={styles.switchAuthBtn}>
-            <Text style={styles.switchAuthText}>New to AliasNest? <Text style={styles.switchAuthLink}>Create account</Text></Text>
+            <Text style={styles.switchAuthText}>new to aliasnest? <Text style={styles.switchAuthLink}>create account</Text></Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -1094,7 +1094,7 @@ export default function App() {
           <>
             <View style={styles.headerLeft}>
               <TouchableOpacity style={styles.iconButton} onPress={() => setDrawerOpen(true)}>
-                <MaterialCommunityIcons name="menu" size={22} color="#5f6368" />
+                <MaterialCommunityIcons name="menu" size={22} color="#7A7468" />
               </TouchableOpacity>
               <View>
                 <Text style={styles.headerTitle}>Inbox</Text>
@@ -1102,7 +1102,7 @@ export default function App() {
               </View>
             </View>
             <TouchableOpacity style={styles.iconButton} onPress={() => void refreshAccount(token, selectedMaskId)}>
-              <MaterialCommunityIcons name="refresh" size={22} color="#5f6368" />
+              <MaterialCommunityIcons name="refresh" size={22} color="#7A7468" />
             </TouchableOpacity>
           </>
         ) : null}
@@ -1111,7 +1111,7 @@ export default function App() {
           <>
             <View style={styles.headerLeft}>
               <TouchableOpacity style={styles.iconButton} onPress={goBackToInbox}>
-                <MaterialCommunityIcons name="arrow-left" size={22} color="#5f6368" />
+                <MaterialCommunityIcons name="arrow-left" size={22} color="#7A7468" />
               </TouchableOpacity>
               <Text style={styles.headerTitle}>Message</Text>
             </View>
@@ -1121,12 +1121,12 @@ export default function App() {
                   <MaterialCommunityIcons
                     name={selectedMessage?.is_read ? "email-outline" : "email-open-outline"}
                     size={20}
-                    color="#5f6368"
+                    color="#7A7468"
                   />
                 </TouchableOpacity>
               ) : null}
               <TouchableOpacity style={styles.iconButtonDanger} onPress={() => void deleteMessage()}>
-                <MaterialCommunityIcons name="trash-can-outline" size={20} color="#5f6368" />
+                <MaterialCommunityIcons name="trash-can-outline" size={20} color="#7A7468" />
               </TouchableOpacity>
             </View>
           </>
@@ -1136,7 +1136,7 @@ export default function App() {
           <>
             <View style={styles.headerLeft}>
               <TouchableOpacity style={styles.iconButton} onPress={() => setViewMode("inbox")}>
-                <MaterialCommunityIcons name="arrow-left" size={22} color="#5f6368" />
+                <MaterialCommunityIcons name="arrow-left" size={22} color="#7A7468" />
               </TouchableOpacity>
               <Text style={styles.headerTitle}>Settings</Text>
             </View>
@@ -1148,12 +1148,12 @@ export default function App() {
           <>
             <View style={styles.headerLeft}>
               <TouchableOpacity style={styles.iconButton} onPress={() => setViewMode("inbox")}>
-                <MaterialCommunityIcons name="arrow-left" size={22} color="#5f6368" />
+                <MaterialCommunityIcons name="arrow-left" size={22} color="#7A7468" />
               </TouchableOpacity>
               <Text style={styles.headerTitle}>New email</Text>
             </View>
             <TouchableOpacity style={styles.iconButton} onPress={() => void sendCompose()} disabled={busy}>
-              <MaterialCommunityIcons name="send" size={20} color="#1a73e8" />
+              <MaterialCommunityIcons name="send" size={20} color="#1A1815" />
             </TouchableOpacity>
           </>
         ) : null}
@@ -1201,7 +1201,7 @@ export default function App() {
 
       {viewMode === "inbox" && masks.length > 0 ? (
         <TouchableOpacity style={styles.composeFab} onPress={openCompose} activeOpacity={0.85}>
-          <MaterialCommunityIcons name="pencil" size={22} color="#001d35" />
+          <MaterialCommunityIcons name="pencil" size={22} color="#1A1815" />
           <Text style={styles.composeFabText}>Compose</Text>
         </TouchableOpacity>
       ) : null}
@@ -1233,7 +1233,7 @@ export default function App() {
                             setShowReplyComposer(true);
                           }}
                         >
-                          <MaterialCommunityIcons name="reply-outline" size={19} color="#1a73e8" />
+                          <MaterialCommunityIcons name="reply-outline" size={19} color="#1A1815" />
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.inlineReplyBtn}
@@ -1243,7 +1243,7 @@ export default function App() {
                             setShowReplyComposer(true);
                           }}
                         >
-                          <MaterialCommunityIcons name="reply-all-outline" size={19} color="#1a73e8" />
+                          <MaterialCommunityIcons name="reply-all-outline" size={19} color="#1A1815" />
                         </TouchableOpacity>
                       </>
                     ) : null}
@@ -1256,7 +1256,7 @@ export default function App() {
                         setShowReplyComposer(true);
                       }}
                     >
-                      <MaterialCommunityIcons name="share-outline" size={19} color="#1a73e8" />
+                      <MaterialCommunityIcons name="share-outline" size={19} color="#1A1815" />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -1301,11 +1301,11 @@ export default function App() {
                     <View style={styles.replyAttachmentList}>
                       {replyFiles.map((file, i) => (
                         <View key={`${file.uri}-${i}`} style={styles.replyAttachmentChip}>
-                          <MaterialCommunityIcons name="paperclip" size={14} color="#3c4043" />
+                          <MaterialCommunityIcons name="paperclip" size={14} color="#3D3A34" />
                           <Text style={styles.replyAttachmentName} numberOfLines={1}>{file.name}</Text>
                           {file.size ? <Text style={styles.replyAttachmentSize}>{formatBytes(file.size)}</Text> : null}
                           <TouchableOpacity onPress={() => removeReplyFile(i)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                            <MaterialCommunityIcons name="close" size={15} color="#80868b" />
+                            <MaterialCommunityIcons name="close" size={15} color="#7A7468" />
                           </TouchableOpacity>
                         </View>
                       ))}
@@ -1313,7 +1313,7 @@ export default function App() {
                   ) : null}
                   <View style={styles.replyComposerActions}>
                     <TouchableOpacity style={styles.attachBtn} onPress={() => void pickAttachments()}>
-                      <MaterialCommunityIcons name="paperclip" size={20} color="#1a73e8" />
+                      <MaterialCommunityIcons name="paperclip" size={20} color="#1A1815" />
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.secondaryBtn}
@@ -1354,10 +1354,10 @@ export default function App() {
               onPress={() => setTimezoneDropdownOpen((prev) => !prev)}
             >
               <Text style={styles.dropdownInputText}>{timezoneInput}</Text>
-              <MaterialCommunityIcons name={timezoneDropdownOpen ? "chevron-up" : "chevron-down"} size={18} color="#607089" />
+              <MaterialCommunityIcons name={timezoneDropdownOpen ? "chevron-up" : "chevron-down"} size={18} color="#7A7468" />
             </TouchableOpacity>
             <TouchableOpacity style={styles.secondaryBtn} onPress={() => void saveTimezone()}>
-              <MaterialCommunityIcons name="check" size={16} color="#1d2b43" />
+              <MaterialCommunityIcons name="check" size={16} color="#1A1815" />
             </TouchableOpacity>
           </View>
           {timezoneDropdownOpen ? (
@@ -1414,7 +1414,7 @@ export default function App() {
                   </TouchableOpacity>
                 ) : null}
                 <TouchableOpacity style={styles.deleteIconBtn} onPress={() => void deleteDomain(domain.id)}>
-                  <MaterialCommunityIcons name="trash-can-outline" size={16} color="#c4314b" />
+                  <MaterialCommunityIcons name="trash-can-outline" size={16} color="#C8463A" />
                 </TouchableOpacity>
               </View>
             ))}
@@ -1429,7 +1429,7 @@ export default function App() {
                   <Text style={styles.dnsLabel}>TXT host</Text>
                   <Text style={styles.dnsValue} numberOfLines={1}>{domain.verify_host}</Text>
                   <TouchableOpacity style={styles.copyIconBtn} onPress={() => void copyValue("TXT host", domain.verify_host)}>
-                    <MaterialCommunityIcons name="content-copy" size={15} color="#0b6bce" />
+                    <MaterialCommunityIcons name="content-copy" size={15} color="#1A1815" />
                   </TouchableOpacity>
                 </View>
 
@@ -1437,7 +1437,7 @@ export default function App() {
                   <Text style={styles.dnsLabel}>TXT value</Text>
                   <Text style={styles.dnsValue} numberOfLines={1}>{domain.verification_token}</Text>
                   <TouchableOpacity style={styles.copyIconBtn} onPress={() => void copyValue("TXT value", domain.verification_token)}>
-                    <MaterialCommunityIcons name="content-copy" size={15} color="#0b6bce" />
+                    <MaterialCommunityIcons name="content-copy" size={15} color="#1A1815" />
                   </TouchableOpacity>
                 </View>
 
@@ -1445,7 +1445,7 @@ export default function App() {
                   <Text style={styles.dnsLabel}>MX host</Text>
                   <Text style={styles.dnsValue} numberOfLines={1}>{domain.mx_host}</Text>
                   <TouchableOpacity style={styles.copyIconBtn} onPress={() => void copyValue("MX host", domain.mx_host)}>
-                    <MaterialCommunityIcons name="content-copy" size={15} color="#0b6bce" />
+                    <MaterialCommunityIcons name="content-copy" size={15} color="#1A1815" />
                   </TouchableOpacity>
                 </View>
 
@@ -1453,7 +1453,7 @@ export default function App() {
                   <Text style={styles.dnsLabel}>MX type</Text>
                   <Text style={styles.dnsValue} numberOfLines={1}>{domain.mx_type}</Text>
                   <TouchableOpacity style={styles.copyIconBtn} onPress={() => void copyValue("MX type", domain.mx_type)}>
-                    <MaterialCommunityIcons name="content-copy" size={15} color="#0b6bce" />
+                    <MaterialCommunityIcons name="content-copy" size={15} color="#1A1815" />
                   </TouchableOpacity>
                 </View>
 
@@ -1461,7 +1461,7 @@ export default function App() {
                   <Text style={styles.dnsLabel}>MX value</Text>
                   <Text style={styles.dnsValue} numberOfLines={1}>{domain.mx_value}</Text>
                   <TouchableOpacity style={styles.copyIconBtn} onPress={() => void copyValue("MX value", domain.mx_value)}>
-                    <MaterialCommunityIcons name="content-copy" size={15} color="#0b6bce" />
+                    <MaterialCommunityIcons name="content-copy" size={15} color="#1A1815" />
                   </TouchableOpacity>
                 </View>
 
@@ -1518,10 +1518,10 @@ export default function App() {
                       onSubmitEditing={() => void saveMaskName(mask.id)}
                     />
                     <TouchableOpacity style={styles.pauseIconBtn} onPress={() => void saveMaskName(mask.id)}>
-                      <MaterialCommunityIcons name="check" size={20} color="#27ae60" />
+                      <MaterialCommunityIcons name="check" size={20} color="#4F7A3E" />
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.deleteIconBtn} onPress={() => { setEditingNameMaskId(null); setEditingNameValue(""); }}>
-                      <MaterialCommunityIcons name="close" size={18} color="#607089" />
+                      <MaterialCommunityIcons name="close" size={18} color="#7A7468" />
                     </TouchableOpacity>
                   </>
                 ) : (
@@ -1535,13 +1535,13 @@ export default function App() {
                       </Text>
                     </View>
                     <TouchableOpacity style={styles.pauseIconBtn} onPress={() => startEditingName(mask)}>
-                      <MaterialCommunityIcons name="pencil-outline" size={18} color="#607089" />
+                      <MaterialCommunityIcons name="pencil-outline" size={18} color="#7A7468" />
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.pauseIconBtn} onPress={() => void toggleMask(mask.id, !mask.is_active)}>
-                      <MaterialCommunityIcons name={mask.is_active ? "pause-circle-outline" : "play-circle-outline"} size={20} color={mask.is_active ? "#607089" : "#27ae60"} />
+                      <MaterialCommunityIcons name={mask.is_active ? "pause-circle-outline" : "play-circle-outline"} size={20} color={mask.is_active ? "#7A7468" : "#4F7A3E"} />
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.deleteIconBtn} onPress={() => void deleteMask(mask.id)}>
-                      <MaterialCommunityIcons name="trash-can-outline" size={16} color="#c4314b" />
+                      <MaterialCommunityIcons name="trash-can-outline" size={16} color="#C8463A" />
                     </TouchableOpacity>
                   </>
                 )}
@@ -1567,7 +1567,7 @@ export default function App() {
             <Text style={styles.dropdownInputText} numberOfLines={1}>
               {masks.find((m) => m.id === composeFromMaskId)?.address || "Select alias"}
             </Text>
-            <MaterialCommunityIcons name={composeFromDropdownOpen ? "chevron-up" : "chevron-down"} size={18} color="#607089" />
+            <MaterialCommunityIcons name={composeFromDropdownOpen ? "chevron-up" : "chevron-down"} size={18} color="#7A7468" />
           </TouchableOpacity>
           {composeFromDropdownOpen ? (
             <View style={styles.dropdownList}>
@@ -1639,11 +1639,11 @@ export default function App() {
             <View style={styles.replyAttachmentList}>
               {composeFiles.map((file, i) => (
                 <View key={`${file.uri}-${i}`} style={styles.replyAttachmentChip}>
-                  <MaterialCommunityIcons name="paperclip" size={14} color="#3c4043" />
+                  <MaterialCommunityIcons name="paperclip" size={14} color="#3D3A34" />
                   <Text style={styles.replyAttachmentName} numberOfLines={1}>{file.name}</Text>
                   {file.size ? <Text style={styles.replyAttachmentSize}>{formatBytes(file.size)}</Text> : null}
                   <TouchableOpacity onPress={() => removeComposeFile(i)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <MaterialCommunityIcons name="close" size={15} color="#80868b" />
+                    <MaterialCommunityIcons name="close" size={15} color="#7A7468" />
                   </TouchableOpacity>
                 </View>
               ))}
@@ -1652,7 +1652,7 @@ export default function App() {
 
           <View style={styles.replyComposerActions}>
             <TouchableOpacity style={styles.attachBtn} onPress={() => void pickComposeAttachments()}>
-              <MaterialCommunityIcons name="paperclip" size={20} color="#1a73e8" />
+              <MaterialCommunityIcons name="paperclip" size={20} color="#1A1815" />
             </TouchableOpacity>
             <TouchableOpacity style={styles.primaryBtnSmall} onPress={() => void sendCompose()} disabled={busy}>
               <Text style={styles.primaryBtnText}>{busy ? "Sending…" : "Send"}</Text>
@@ -1709,7 +1709,7 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "#F5F1EA",
   },
   centered: {
     flex: 1,
@@ -1723,9 +1723,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#fff",
+    backgroundColor: "#F5F1EA",
     borderBottomWidth: 1,
-    borderBottomColor: "#e8eaed",
+    borderBottomColor: "#D9D2C3",
   },
   headerLeft: {
     flexDirection: "row",
@@ -1739,14 +1739,19 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   headerTitle: {
-    fontSize: 17,
-    fontWeight: "500",
-    color: "#202124",
+    fontSize: 22,
+    fontWeight: "400",
+    fontFamily: Platform.OS === "ios" ? "Georgia" : "serif",
+    fontStyle: "italic",
+    letterSpacing: -0.4,
+    color: "#1A1815",
   },
   headerSubTitle: {
-    fontSize: 12,
-    color: "#5f6368",
+    fontSize: 11,
+    color: "#7A7468",
     maxWidth: 250,
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    letterSpacing: 0.4,
   },
   iconButton: {
     width: 40,
@@ -1774,43 +1779,48 @@ const styles = StyleSheet.create({
   },
   iconButtonText: {
     fontSize: 20,
-    color: "#ffffff",
+    color: "#F5F1EA",
     fontWeight: "600",
   },
   brand: {
-    fontSize: 34,
-    fontWeight: "800",
-    color: "#0f172a",
-    marginBottom: 4,
-  },
-  subtitle: {
-    color: "#52627c",
+    fontSize: 44,
+    fontWeight: "300",
+    fontFamily: Platform.OS === "ios" ? "Georgia" : "serif",
+    fontStyle: "italic",
+    letterSpacing: -1.0,
+    color: "#1A1815",
     marginBottom: 8,
   },
+  subtitle: {
+    color: "#7A7468",
+    marginBottom: 16,
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    fontSize: 11,
+    letterSpacing: 1.4,
+    textTransform: "uppercase",
+  },
   error: {
-    color: "#b42318",
+    color: "#A6362C",
     paddingHorizontal: 12,
     paddingVertical: 8,
     fontSize: 13,
   },
   loginCard: {
     marginTop: 90,
-    marginHorizontal: 16,
-    backgroundColor: "#fff",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#d6e0ee",
-    padding: 16,
-    gap: 10,
+    marginHorizontal: 24,
+    padding: 0,
+    gap: 12,
+    alignItems: "stretch",
   },
   input: {
-    backgroundColor: "#fff",
+    backgroundColor: "#F5F1EA",
     borderWidth: 1,
-    borderColor: "#cfd9e8",
-    borderRadius: 10,
-    paddingHorizontal: 11,
-    paddingVertical: 10,
-    color: "#0f172a",
+    borderColor: "#D9D2C3",
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    color: "#1A1815",
+    fontSize: 15,
   },
   dropdownInput: {
     flexDirection: "row",
@@ -1818,15 +1828,15 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   dropdownInputText: {
-    color: "#0f172a",
+    color: "#1A1815",
     fontSize: 14,
   },
   dropdownList: {
     marginTop: 6,
     borderWidth: 1,
-    borderColor: "#d8e2f1",
+    borderColor: "#D9D2C3",
     borderRadius: 10,
-    backgroundColor: "#fff",
+    backgroundColor: "#F5F1EA",
     maxHeight: 220,
   },
   dropdownScroll: {
@@ -1836,41 +1846,47 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#edf2fa",
+    borderBottomColor: "#EFE9DF",
   },
   dropdownOptionActive: {
-    backgroundColor: "#edf5ff",
+    backgroundColor: "#EFE9DF",
   },
   dropdownOptionText: {
-    color: "#1d2b43",
+    color: "#1A1815",
     fontSize: 13,
   },
   dropdownOptionTextActive: {
-    color: "#0b6bce",
+    color: "#1A1815",
     fontWeight: "600",
   },
   primaryBtn: {
-    backgroundColor: "#0b6bce",
-    borderRadius: 10,
-    paddingVertical: 11,
+    backgroundColor: "#1A1815",
+    borderRadius: 6,
+    paddingVertical: 13,
     alignItems: "center",
+    marginTop: 6,
   },
   primaryBtnText: {
-    color: "#fff",
-    fontWeight: "700",
+    color: "#F5F1EA",
+    fontWeight: "500",
+    fontSize: 14,
+    letterSpacing: 0.2,
   },
   messageRow: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 12,
-    backgroundColor: "#ffffff",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    backgroundColor: "#F5F1EA",
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#f1f3f4",
+    borderBottomColor: "#D9D2C3",
   },
   messageUnread: {
-    backgroundColor: "#fff",
+    backgroundColor: "#F5F1EA",
+    borderLeftWidth: 2,
+    borderLeftColor: "#C8463A",
+    paddingLeft: 16,
   },
   avatarCircle: {
     width: 36,
@@ -1881,7 +1897,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   avatarText: {
-    color: "#ffffff",
+    color: "#F5F1EA",
     fontWeight: "500",
     fontSize: 15,
     letterSpacing: -0.2,
@@ -1898,67 +1914,75 @@ const styles = StyleSheet.create({
   },
   senderText: {
     flex: 1,
-    color: "#5f6368",
-    fontSize: 14,
+    color: "#7A7468",
+    fontSize: 15,
+    fontFamily: Platform.OS === "ios" ? "Georgia" : "serif",
+    fontStyle: "italic",
     fontWeight: "400",
+    letterSpacing: -0.1,
   },
   senderTextUnread: {
-    fontWeight: "700",
-    color: "#202124",
+    fontWeight: "400",
+    color: "#1A1815",
   },
   timeText: {
-    color: "#5f6368",
-    fontSize: 12,
+    color: "#7A7468",
+    fontSize: 11,
     marginLeft: 6,
     fontWeight: "400",
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    letterSpacing: 0.2,
   },
   timeTextUnread: {
-    fontWeight: "700",
-    color: "#202124",
+    fontWeight: "500",
+    color: "#1A1815",
   },
   subjectText: {
-    color: "#5f6368",
-    fontSize: 14,
-    marginTop: 1,
+    color: "#7A7468",
+    fontSize: 13,
+    marginTop: 2,
     fontWeight: "400",
   },
   subjectTextUnread: {
-    fontWeight: "700",
-    color: "#202124",
+    fontWeight: "500",
+    color: "#1A1815",
   },
   previewText: {
-    color: "#5f6368",
+    color: "#7A7468",
     fontSize: 13,
     marginTop: 1,
   },
   aliasText: {
-    color: "#1a73e8",
-    fontSize: 11,
-    marginTop: 4,
+    color: "#7A7468",
+    fontSize: 10,
+    marginTop: 5,
     fontWeight: "500",
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    letterSpacing: 0.4,
   },
   emptyText: {
-    color: "#607089",
+    color: "#7A7468",
     padding: 18,
     fontSize: 14,
   },
   messageScreenWrap: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "#F5F1EA",
   },
   detailHeader: {
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 4,
-    backgroundColor: "#fff",
+    backgroundColor: "#F5F1EA",
   },
   detailSubject: {
-    color: "#202124",
-    fontSize: 22,
+    color: "#1A1815",
+    fontSize: 26,
     fontWeight: "400",
-    marginBottom: 14,
-    letterSpacing: -0.1,
-    lineHeight: 28,
+    fontFamily: Platform.OS === "ios" ? "Georgia" : "serif",
+    marginBottom: 16,
+    letterSpacing: -0.4,
+    lineHeight: 32,
   },
   detailHeaderRow: {
     flexDirection: "row",
@@ -1973,45 +1997,48 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   detailFromName: {
-    color: "#202124",
-    fontSize: 14,
-    fontWeight: "500",
+    color: "#1A1815",
+    fontSize: 16,
+    fontWeight: "400",
+    fontFamily: Platform.OS === "ios" ? "Georgia" : "serif",
+    fontStyle: "italic",
+    letterSpacing: -0.2,
     marginBottom: 1,
   },
   detailMetaSub: {
-    color: "#5f6368",
+    color: "#7A7468",
     fontSize: 12,
     marginTop: 1,
   },
   detailMeta: {
-    color: "#5f6368",
+    color: "#7A7468",
     fontSize: 12,
     marginBottom: 2,
   },
   secondaryBtn: {
     borderWidth: 1,
-    borderColor: "#c7d2e5",
+    borderColor: "#D9D2C3",
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    backgroundColor: "#fff",
+    backgroundColor: "#F5F1EA",
   },
   secondaryBtnCompact: {
     borderWidth: 1,
-    borderColor: "#c7d2e5",
+    borderColor: "#D9D2C3",
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: "#fff",
+    backgroundColor: "#F5F1EA",
   },
   secondaryBtnText: {
-    color: "#1d2b43",
+    color: "#1A1815",
     fontWeight: "600",
     fontSize: 12,
   },
   deleteBtn: {
     borderRadius: 10,
-    backgroundColor: "#c4314b",
+    backgroundColor: "#C8463A",
     paddingHorizontal: 10,
     paddingVertical: 8,
     alignSelf: "flex-start",
@@ -2019,7 +2046,7 @@ const styles = StyleSheet.create({
   },
   deleteBtnCompact: {
     borderRadius: 10,
-    backgroundColor: "#c4314b",
+    backgroundColor: "#C8463A",
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
@@ -2028,8 +2055,8 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#f0b8c2",
-    backgroundColor: "#ffffff",
+    borderColor: "#D9D2C3",
+    backgroundColor: "#F5F1EA",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2038,16 +2065,16 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#bfd3ef",
-    backgroundColor: "#f8fbff",
+    borderColor: "#D9D2C3",
+    backgroundColor: "#EFE9DF",
     alignItems: "center",
     justifyContent: "center",
   },
   dnsCard: {
-    backgroundColor: "#fff",
+    backgroundColor: "#F5F1EA",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#d8e2f1",
+    borderColor: "#D9D2C3",
     padding: 9,
   },
   dnsRow: {
@@ -2058,28 +2085,28 @@ const styles = StyleSheet.create({
   },
   dnsLabel: {
     width: 70,
-    color: "#51607a",
+    color: "#3D3A34",
     fontSize: 12,
     fontWeight: "600",
   },
   dnsValue: {
     flex: 1,
-    color: "#1d2b43",
+    color: "#1A1815",
     fontSize: 12,
   },
   dnsHint: {
     marginTop: 8,
-    color: "#607089",
+    color: "#7A7468",
     fontSize: 11,
     lineHeight: 16,
   },
   deleteBtnText: {
-    color: "#fff",
+    color: "#F5F1EA",
     fontWeight: "700",
     fontSize: 12,
   },
   primaryBtnSmall: {
-    backgroundColor: "#0b6bce",
+    backgroundColor: "#1A1815",
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -2087,20 +2114,20 @@ const styles = StyleSheet.create({
   },
   bodyScroll: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "#F5F1EA",
   },
   bodyCard: {
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
   bodyText: {
-    color: "#202124",
+    color: "#1A1815",
     fontSize: 15,
     lineHeight: 22,
   },
   htmlBody: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "#F5F1EA",
   },
   inlineReplyIcons: {
     flexDirection: "row",
@@ -2118,37 +2145,37 @@ const styles = StyleSheet.create({
   replyComposerCard: {
     marginTop: 10,
     borderWidth: 1,
-    borderColor: "#d8e2f1",
+    borderColor: "#D9D2C3",
     borderRadius: 10,
-    backgroundColor: "#fff",
+    backgroundColor: "#F5F1EA",
     padding: 10,
   },
   replyComposerTitle: {
-    color: "#0f172a",
+    color: "#1A1815",
     fontSize: 13,
     fontWeight: "700",
     marginBottom: 6,
   },
   replyInput: {
     borderWidth: 1,
-    borderColor: "#cfd9e8",
+    borderColor: "#D9D2C3",
     borderRadius: 10,
     padding: 10,
     minHeight: 84,
     textAlignVertical: "top",
-    color: "#0f172a",
+    color: "#1A1815",
   },
   replyToInput: {
     borderWidth: 1,
-    borderColor: "#cfd9e8",
+    borderColor: "#D9D2C3",
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 8,
     marginBottom: 6,
-    color: "#0f172a",
+    color: "#1A1815",
   },
   replyComposerHint: {
-    color: "#5f6368",
+    color: "#7A7468",
     fontSize: 11,
     marginTop: 6,
   },
@@ -2175,18 +2202,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#f1f3f4",
+    backgroundColor: "#EFE9DF",
     borderRadius: 8,
     paddingVertical: 6,
     paddingHorizontal: 10,
   },
   replyAttachmentName: {
     flex: 1,
-    color: "#3c4043",
+    color: "#3D3A34",
     fontSize: 12,
   },
   replyAttachmentSize: {
-    color: "#80868b",
+    color: "#7A7468",
     fontSize: 11,
   },
   settingsScreen: {
@@ -2207,7 +2234,7 @@ const styles = StyleSheet.create({
     minHeight: 160,
   },
   composeCcToggle: {
-    color: "#1a73e8",
+    color: "#1A1815",
     fontSize: 13,
     fontWeight: "600",
   },
@@ -2221,32 +2248,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     height: 52,
     borderRadius: 16,
-    backgroundColor: "#c2e7ff",
-    shadowColor: "#3c4043",
+    backgroundColor: "#EFE9DF",
+    shadowColor: "#3D3A34",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 4,
   },
   composeFabText: {
-    color: "#001d35",
+    color: "#1A1815",
     fontSize: 14,
     fontWeight: "600",
   },
   settingsSectionTitle: {
-    color: "#0f172a",
+    color: "#1A1815",
     fontSize: 16,
     fontWeight: "700",
     marginBottom: 8,
     marginTop: 6,
   },
   settingsLabel: {
-    color: "#51607a",
+    color: "#3D3A34",
     fontSize: 13,
     marginBottom: 4,
   },
   userText: {
-    color: "#52627c",
+    color: "#3D3A34",
     marginBottom: 8,
   },
   inlineRow: {
@@ -2262,10 +2289,10 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   settingsRow: {
-    backgroundColor: "#fff",
+    backgroundColor: "#F5F1EA",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#d8e2f1",
+    borderColor: "#D9D2C3",
     padding: 9,
     flexDirection: "row",
     alignItems: "center",
@@ -2275,12 +2302,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   settingsRowTitle: {
-    color: "#0f172a",
+    color: "#1A1815",
     fontWeight: "600",
     fontSize: 13,
   },
   settingsRowSubtitle: {
-    color: "#607089",
+    color: "#7A7468",
     fontSize: 12,
     marginTop: 2,
   },
@@ -2291,18 +2318,18 @@ const styles = StyleSheet.create({
   },
   domainPill: {
     borderWidth: 1,
-    borderColor: "#cfd9e8",
+    borderColor: "#D9D2C3",
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: "#fff",
+    backgroundColor: "#F5F1EA",
   },
   domainPillActive: {
-    borderColor: "#0b6bce",
-    backgroundColor: "#edf5ff",
+    borderColor: "#1A1815",
+    backgroundColor: "#EFE9DF",
   },
   domainPillText: {
-    color: "#1d2b43",
+    color: "#1A1815",
     fontSize: 12,
     fontWeight: "600",
   },
@@ -2310,12 +2337,12 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 24,
     borderRadius: 10,
-    backgroundColor: "#192d4d",
+    backgroundColor: "#1A1815",
     paddingVertical: 11,
     alignItems: "center",
   },
   logoutBtnText: {
-    color: "#fff",
+    color: "#F5F1EA",
     fontWeight: "700",
   },
   drawerOverlay: {
@@ -2332,13 +2359,13 @@ const styles = StyleSheet.create({
   },
   drawerPanel: {
     width: 290,
-    backgroundColor: "#fff",
+    backgroundColor: "#F5F1EA",
     paddingHorizontal: 12,
     borderRightWidth: 1,
-    borderRightColor: "#d8e2f1",
+    borderRightColor: "#D9D2C3",
   },
   drawerTitle: {
-    color: "#0f172a",
+    color: "#1A1815",
     fontWeight: "700",
     fontSize: 20,
     marginBottom: 10,
@@ -2353,17 +2380,17 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   drawerItemActive: {
-    backgroundColor: "#edf5ff",
+    backgroundColor: "#EFE9DF",
   },
   drawerItemText: {
-    color: "#1d2b43",
+    color: "#1A1815",
     fontSize: 13,
     fontWeight: "600",
     maxWidth: 210,
   },
   drawerBadge: {
-    backgroundColor: "#0b6bce",
-    color: "#fff",
+    backgroundColor: "#1A1815",
+    color: "#F5F1EA",
     borderRadius: 999,
     overflow: "hidden",
     paddingHorizontal: 7,
@@ -2375,13 +2402,13 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   drawerItemTextPaused: {
-    color: "#8a9ab2",
+    color: "#7A7468",
   },
   drawerPausedBadge: {
     fontSize: 10,
     fontWeight: "600",
-    color: "#c49b00",
-    backgroundColor: "#fef9e0",
+    color: "#A37B3E",
+    backgroundColor: "#F5E6C8",
     borderRadius: 6,
     paddingHorizontal: 5,
     paddingVertical: 1,
@@ -2389,18 +2416,18 @@ const styles = StyleSheet.create({
   },
   settingsRowPaused: {
     opacity: 0.7,
-    backgroundColor: "#fafbfc",
+    backgroundColor: "#F5F1EA",
   },
   settingsRowTitlePaused: {
-    color: "#8a9ab2",
+    color: "#7A7468",
   },
   pauseIconBtn: {
     width: 40,
     height: 40,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#d8e2f1",
-    backgroundColor: "#f4f8ff",
+    borderColor: "#D9D2C3",
+    backgroundColor: "#F5F1EA",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 4,
@@ -2410,11 +2437,11 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   switchAuthText: {
-    color: "#607089",
+    color: "#7A7468",
     fontSize: 13,
   },
   switchAuthLink: {
-    color: "#0a66c2",
+    color: "#1A1815",
     fontWeight: "600",
   },
   busy: {
