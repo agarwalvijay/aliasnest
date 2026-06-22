@@ -17,6 +17,7 @@
     },
     "android": {
       "package": "com.aliasnest.aliasnest",
+      "versionCode": 1,
       "googleServicesFile": "./google-services.json"
     },
     "plugins": [
