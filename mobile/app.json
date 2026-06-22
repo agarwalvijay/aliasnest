@@ -13,10 +13,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.aliasnest.app"
+      "bundleIdentifier": "com.atsumilabs.aliasnest"
     },
     "android": {
-      "package": "com.aliasnest.aliasnest",
+      "package": "com.atsumilabs.aliasnest",
       "versionCode": 1,
       "googleServicesFile": "./google-services.json"
     },
