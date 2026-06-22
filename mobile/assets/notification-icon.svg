@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+  <!-- Android strips color from notification icons; only the alpha/silhouette
+       is rendered (tinted by Material). We use white shapes on transparent. -->
+  <text x="48" y="76" text-anchor="middle"
+        font-family="'Noto Serif JP', 'Hiragino Mincho ProN', 'Yu Mincho', serif"
+        font-weight="900" font-size="76" fill="#ffffff">巣</text>
+</svg>

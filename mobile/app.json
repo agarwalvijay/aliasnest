@@ -20,7 +20,13 @@
       "googleServicesFile": "./google-services.json"
     },
     "plugins": [
-      "expo-notifications"
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#C8463A"
+        }
+      ]
     ],
     "extra": {
       "apiBaseUrl": "http://localhost:8080",

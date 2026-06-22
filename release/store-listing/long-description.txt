@@ -1,0 +1,38 @@
+AliasNest is a private inbox for the disposable email addresses you give out to the world.
+
+Sign up for a service. Order a package. Test a newsletter. You don't have to hand over your real email anymore — create a mask in AliasNest, hand it out, and read the mail in a calm, ad-free inbox that's only ever yours.
+
+
+HOW IT WORKS
+
+— Create unlimited aliases on the shared aliasnest.com domain, or bring your own (custom domains are first-class, verified via TXT and MX records).
+— Mail sent to the alias arrives in your AliasNest inbox in seconds. Push notifications optional.
+— Reply or forward — the recipient sees the alias, not your real address. Your inbox stays private.
+— Pause or delete an alias the moment it starts attracting noise.
+
+
+WHY PEOPLE USE IT
+
+— Stop a sender by deleting the alias they wrote to. No unsubscribe forms, no spam folders.
+— Compartmentalize: a fresh alias per service means you can tell which leak came from where.
+— Keep your real inbox quiet and your real address out of marketing databases.
+— Use plus-addressing on any alias (e.g., shopping1+amazon@aliasnest.com).
+
+
+WHAT'S IN THE APP
+
+— Unified inbox across every alias you've created, with per-alias filtering.
+— Full HTML email rendering with images, links, and original formatting preserved.
+— Reply, reply-all, and forward — formatting preserved, original message quoted.
+— Attachment support: open inbound, send outbound.
+— Per-alias display names so your replies look right ("Vijay Agarwal" instead of a raw address).
+— Compose new mail directly from any alias.
+— Custom domain support with TXT and MX verification built in.
+— Light, editorial design. No ads, no tracking, no AI features bolted on.
+
+
+PRIVACY
+
+We don't sell, share, or feed your mail into a training set. Messages live on a server we run. Mail in transit travels over TLS but is stored unencrypted on the server like any standard mail service — treat it the way you'd treat any other private inbox.
+
+Designed and built by atsumilabs.
