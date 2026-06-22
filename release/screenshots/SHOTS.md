@@ -1,5 +1,9 @@
 # Screenshot shot list
 
+> **Status (2026-06-22):** The five files currently in `phone/` are *web-app captures driven by Playwright at iPhone 14 Pro Max viewport (1290×2796)*, not native iOS captures. They are accurate for the design and copy review and can be used as placeholder assets for Play Store soft-launch, but Apple expects screenshots of the actual native app on submission. Plan to replace them with iOS Simulator captures from an EAS simulator build before the App Store submission. The shot list below describes what each file shows and what the *native* recapture should match.
+
+
+
 Capture these screens with realistic-looking content. Don't show real personal email; use a demo account with hand-crafted messages.
 
 ## Demo content to seed before shooting
