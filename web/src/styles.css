@@ -693,6 +693,7 @@ a { color: var(--seal); }
   flex-shrink: 0;
 }
 .read-toolbar-spacer { flex: 1; }
+.back-to-list { display: none; }
 
 .read-content {
   padding: 28px 36px 20px;
@@ -1166,7 +1167,10 @@ a { color: var(--seal); }
   .sidebar { display: none; }
   .main-area { grid-template-columns: 1fr; }
   .main-area:has(.read-empty) { grid-template-columns: 1fr; }
+  /* Mobile: list OR message, never both. */
+  .main-area:not(:has(.read-empty)) .list-pane { display: none; }
   .read-pane { display: flex !important; }
+  .back-to-list { display: inline-flex; }
   .topbar { padding: 0 14px; }
   .user-pill { display: none; }
 }
