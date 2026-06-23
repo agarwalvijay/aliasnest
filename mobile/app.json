@@ -17,7 +17,7 @@
     },
     "android": {
       "package": "com.atsumilabs.aliasnest",
-      "versionCode": 1,
+      "versionCode": 2,
       "googleServicesFile": "./google-services.json"
     },
     "plugins": [
