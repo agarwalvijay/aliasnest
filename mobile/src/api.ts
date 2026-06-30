@@ -1,6 +1,12 @@
 export type ApiMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8080";
+// Release builds default to production; dev (expo start) defaults to localhost.
+// EXPO_PUBLIC_API_BASE_URL overrides both (useful for staging).
+declare const __DEV__: boolean;
+const FALLBACK = typeof __DEV__ !== "undefined" && __DEV__
+  ? "http://localhost:8080"
+  : "https://app.aliasnest.com";
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || FALLBACK;
 
 export async function apiRequest<T>(
   path: string,

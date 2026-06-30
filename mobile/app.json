@@ -2,7 +2,7 @@
   "expo": {
     "name": "AliasNest",
     "slug": "aliasnest",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "icon": "./assets/icon.png",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -17,7 +17,7 @@
     },
     "android": {
       "package": "com.atsumilabs.aliasnest",
-      "versionCode": 3,
+      "versionCode": 4,
       "googleServicesFile": "./google-services.json",
       "permissions": ["com.google.android.gms.permission.AD_ID"]
     },
